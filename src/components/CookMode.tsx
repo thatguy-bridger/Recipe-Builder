@@ -75,7 +75,7 @@ export function CookMode({
       <aside
         ref={asideRef}
         style={{ width: sidebarWidth }}
-        className="flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] text-base"
+        className="flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] text-base [container-type:inline-size]"
       >
         <div
           style={equipment.length > 0 ? { height: ingredientsHeight } : undefined}

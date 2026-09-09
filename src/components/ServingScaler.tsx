@@ -75,7 +75,10 @@ export function ServingScaler({
             </span>
             <span className="min-w-0 break-words">{ing.name}</span>
             {ing.notes && (
-              <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-[var(--accent)] shadow-[0_0_8px_var(--accent)]">
+              <span
+                className="rounded-full bg-[var(--accent-soft)] px-[1.5cqw] py-[0.4cqw] font-semibold uppercase tracking-wide text-[var(--accent)] shadow-[0_0_8px_var(--accent)]"
+                style={{ fontSize: "clamp(0.5rem, 3.2cqw, 0.75rem)" }}
+              >
                 {ing.notes}
               </span>
             )}
