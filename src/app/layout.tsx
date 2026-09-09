@@ -14,9 +14,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const iconUrl =
+  "https://pfobqnctixdpdzzrtriu.supabase.co/storage/v1/object/public/recipe-photos/brand/icon-128.png";
+
 export const metadata: Metadata = {
   title: "Recipe Boxed",
   description: "A shared home for every recipe, from the kitchen to the classroom.",
+  icons: {
+    icon: iconUrl,
+    apple: iconUrl,
+    shortcut: iconUrl,
+  },
 };
 
 const themeInitScript = `

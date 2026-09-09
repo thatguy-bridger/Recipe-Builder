@@ -27,7 +27,11 @@ export async function NavBar() {
           className="flex items-center gap-2 font-serif text-lg font-semibold tracking-tight"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="" className="h-7 w-7" />
+          <img
+            src="https://pfobqnctixdpdzzrtriu.supabase.co/storage/v1/object/public/recipe-photos/brand/logo-64.png"
+            alt=""
+            className="h-7 w-7"
+          />
           Recipe Boxed
         </Link>
         <nav className="flex items-center gap-4 text-sm">
