@@ -89,7 +89,7 @@ export function CookMode({
       />
 
       <section className="flex flex-1 flex-col overflow-y-auto p-8">
-        <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8">
+        <div className="flex w-full flex-1 flex-col gap-8">
           <div className="flex items-center justify-between">
             <span className="text-sm text-[var(--text-muted)]">
               Step {current + 1} of {steps.length}
