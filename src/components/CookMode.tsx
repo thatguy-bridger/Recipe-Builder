@@ -9,6 +9,7 @@ export function CookMode({
   recipeId,
   title,
   baseServings,
+  servingUnit,
   ingredients,
   equipment,
   steps,
@@ -16,18 +17,19 @@ export function CookMode({
   recipeId: string;
   title: string;
   baseServings: number;
+  servingUnit: string;
   ingredients: Ingredient[];
   equipment: string[];
   steps: Step[];
 }) {
-  const [sidebarWidth, setSidebarWidth] = useState(360);
+  const [sidebarWidth, setSidebarWidth] = useState(400);
   const [current, setCurrent] = useState(0);
-  const [windowSize, setWindowSize] = useState(3); // how many upcoming steps to show
+  const [extraSteps, setExtraSteps] = useState(1); // additional steps beyond the guaranteed neighbors
   const dragging = useRef(false);
 
   const onDrag = useCallback((e: MouseEvent) => {
     if (!dragging.current) return;
-    setSidebarWidth(Math.min(560, Math.max(260, e.clientX)));
+    setSidebarWidth(Math.min(640, Math.max(300, e.clientX)));
   }, []);
 
   const startDrag = () => {
@@ -41,16 +43,17 @@ export function CookMode({
     window.addEventListener("mouseup", stop);
   };
 
-  const visibleSteps = steps.slice(
-    Math.max(0, current - 1),
-    Math.min(steps.length, current + windowSize)
-  );
+  // Always guarantee the previous and next step are visible, no matter the
+  // window size setting — extraSteps only adds further out from that floor.
+  const start = Math.max(0, current - 1 - Math.floor(extraSteps / 2));
+  const end = Math.min(steps.length, current + 2 + Math.ceil(extraSteps / 2));
+  const visibleSteps = steps.slice(start, end);
 
   return (
     <div className="flex h-[calc(100vh-57px)] w-full overflow-hidden">
       <aside
         style={{ width: sidebarWidth }}
-        className="flex shrink-0 flex-col gap-8 overflow-y-auto border-r border-[var(--border)] bg-[var(--bg-elevated)] p-6"
+        className="flex shrink-0 flex-col gap-8 overflow-y-auto border-r border-[var(--border)] bg-[var(--bg-elevated)] p-6 text-base"
       >
         <div>
           <Link
@@ -59,14 +62,14 @@ export function CookMode({
           >
             &larr; Exit cook mode
           </Link>
-          <h1 className="mt-2 font-serif text-xl font-semibold">{title}</h1>
+          <h1 className="mt-2 font-serif text-2xl font-semibold">{title}</h1>
         </div>
 
         <div>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
             Ingredients
           </h2>
-          <ServingScaler baseServings={baseServings} ingredients={ingredients} />
+          <ServingScaler baseServings={baseServings} servingUnit={servingUnit} ingredients={ingredients} />
         </div>
 
         {equipment.length > 0 && (
@@ -74,7 +77,7 @@ export function CookMode({
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               Equipment
             </h2>
-            <ul className="flex flex-col gap-1 text-sm">
+            <ul className="flex flex-col gap-1.5 text-base">
               {equipment.map((eq) => (
                 <li key={eq}>{eq}</li>
               ))}
@@ -91,20 +94,20 @@ export function CookMode({
       <section className="flex flex-1 flex-col overflow-y-auto p-8">
         <div className="flex w-full flex-1 flex-col gap-8">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-[var(--text-muted)]">
+            <span className="text-base text-[var(--text-muted)]">
               Step {current + 1} of {steps.length}
             </span>
-            <label className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+            <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
               Show
               <select
-                value={windowSize}
-                onChange={(e) => setWindowSize(Number(e.target.value))}
+                value={extraSteps}
+                onChange={(e) => setExtraSteps(Number(e.target.value))}
                 className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1"
               >
-                <option value={1}>1 step</option>
-                <option value={2}>2 steps</option>
-                <option value={3}>3 steps</option>
-                <option value={5}>5 steps</option>
+                <option value={0}>Just neighbors</option>
+                <option value={1}>+1 more</option>
+                <option value={3}>+3 more</option>
+                <option value={5}>+5 more</option>
               </select>
             </label>
           </div>
@@ -117,23 +120,23 @@ export function CookMode({
                 <div
                   key={step.id}
                   onClick={() => setCurrent(idx)}
-                  className={`cursor-pointer rounded-[var(--radius)] border p-6 transition-all ${
+                  className={`cursor-pointer rounded-[var(--radius)] border transition-all ${
                     isCurrent
-                      ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[var(--shadow)]"
-                      : "border-[var(--border)] bg-[var(--bg-elevated)] opacity-60"
+                      ? "border-[var(--accent)] bg-[var(--accent-soft)] p-8 shadow-[var(--shadow)]"
+                      : "border-[var(--border)] bg-[var(--bg-elevated)] p-4 opacity-60"
                   }`}
                 >
-                  <div className="flex items-start gap-4">
+                  <div className={`flex items-start ${isCurrent ? "gap-5" : "gap-3"}`}>
                     <span
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                      className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${
                         isCurrent
-                          ? "bg-[var(--accent)] text-white"
-                          : "bg-[var(--bg-muted)] text-[var(--text-muted)]"
+                          ? "h-11 w-11 bg-[var(--accent)] text-xl text-white"
+                          : "h-7 w-7 bg-[var(--bg-muted)] text-sm text-[var(--text-muted)]"
                       }`}
                     >
                       {idx + 1}
                     </span>
-                    <p className={isCurrent ? "text-lg leading-relaxed" : "leading-relaxed"}>
+                    <p className={isCurrent ? "text-2xl leading-relaxed" : "text-base leading-relaxed"}>
                       {step.body}
                     </p>
                   </div>
@@ -142,7 +145,9 @@ export function CookMode({
                     <img
                       src={step.photo_url}
                       alt=""
-                      className="mt-4 max-h-64 w-full rounded-lg object-cover"
+                      className={`mt-4 w-full rounded-lg object-cover ${
+                        isCurrent ? "max-h-96" : "max-h-40"
+                      }`}
                     />
                   )}
                 </div>

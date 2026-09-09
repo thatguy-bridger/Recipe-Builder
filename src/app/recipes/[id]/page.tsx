@@ -119,7 +119,11 @@ export default async function RecipeDetailPage({
         <section>
           <h2 className="font-serif text-xl font-semibold">Ingredients</h2>
           <div className="mt-3">
-            <ServingScaler baseServings={recipe.servings ?? 1} ingredients={ingredients} />
+            <ServingScaler
+              baseServings={recipe.servings ?? 1}
+              servingUnit={recipe.serving_unit}
+              ingredients={ingredients}
+            />
           </div>
 
           {recipe.equipment.length > 0 && (

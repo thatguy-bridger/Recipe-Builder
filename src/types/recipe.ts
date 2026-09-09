@@ -37,6 +37,7 @@ export type Recipe = {
   title: string;
   description: string | null;
   servings: number | null;
+  serving_unit: string;
   prep_minutes: number | null;
   cook_minutes: number | null;
   tags: string[];

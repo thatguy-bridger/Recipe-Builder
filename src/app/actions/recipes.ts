@@ -25,6 +25,7 @@ export async function createRecipe(formData: FormData) {
   const title = titleCase(String(formData.get("title")));
   const description = String(formData.get("description") || "");
   const servings = Number(formData.get("servings")) || 4;
+  const servingUnit = titleCase(String(formData.get("serving_unit") || "Serving").trim()) || "Serving";
   const prep = formData.get("prep_minutes") ? Number(formData.get("prep_minutes")) : null;
   const cook = formData.get("cook_minutes") ? Number(formData.get("cook_minutes")) : null;
   const tags = String(formData.get("tags") || "")
@@ -51,6 +52,7 @@ export async function createRecipe(formData: FormData) {
       title,
       description,
       servings,
+      serving_unit: servingUnit,
       prep_minutes: prep,
       cook_minutes: cook,
       tags,
@@ -96,6 +98,7 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
   const title = titleCase(String(formData.get("title")));
   const description = String(formData.get("description") || "");
   const servings = Number(formData.get("servings")) || 4;
+  const servingUnit = titleCase(String(formData.get("serving_unit") || "Serving").trim()) || "Serving";
   const prep = formData.get("prep_minutes") ? Number(formData.get("prep_minutes")) : null;
   const cook = formData.get("cook_minutes") ? Number(formData.get("cook_minutes")) : null;
   const tags = String(formData.get("tags") || "")
@@ -121,6 +124,7 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
       title,
       description,
       servings,
+      serving_unit: servingUnit,
       prep_minutes: prep,
       cook_minutes: cook,
       tags,
