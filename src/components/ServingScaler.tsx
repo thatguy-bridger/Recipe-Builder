@@ -54,7 +54,11 @@ export function ServingScaler({
               {ing.amount != null ? formatAmount(ing.amount) : ""} {ing.unit ?? ""}
             </span>
             <span>{ing.name}</span>
-            {ing.notes && <span className="text-[var(--text-muted)]">({ing.notes})</span>}
+            {ing.notes && (
+              <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)] shadow-[0_0_8px_var(--accent)]">
+                {ing.notes}
+              </span>
+            )}
           </li>
         ))}
       </ul>

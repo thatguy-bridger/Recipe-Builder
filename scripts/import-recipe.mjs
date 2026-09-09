@@ -67,6 +67,18 @@ function isUrl(s) {
   return /^https?:\/\//.test(s || "");
 }
 
+function titleCase(input) {
+  if (!input) return input;
+  return input
+    .split(/(\s+)/)
+    .map((word) => {
+      if (/^\s+$/.test(word) || word.length === 0) return word;
+      if (word.length > 1 && word === word.toUpperCase() && /[A-Z]/.test(word)) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join("");
+}
+
 async function uploadLocalPhoto(relPath) {
   if (isUrl(relPath)) return relPath;
   const fullPath = resolve(baseDir, relPath);
@@ -120,13 +132,13 @@ async function main() {
     .from("recipes")
     .insert({
       owner_id: ownerId,
-      title: recipe.title,
+      title: titleCase(recipe.title),
       description: recipe.description || null,
       servings: recipe.servings ?? 4,
       prep_minutes: recipe.prep_minutes ?? null,
       cook_minutes: recipe.cook_minutes ?? null,
-      tags: recipe.tags || [],
-      equipment: recipe.equipment || [],
+      tags: (recipe.tags || []).map(titleCase),
+      equipment: (recipe.equipment || []).map(titleCase),
       video_url: recipe.video_url || null,
       is_published: recipe.is_published ?? true,
     })
@@ -143,8 +155,8 @@ async function main() {
         position: i,
         amount: ing.amount ?? null,
         unit: ing.unit || null,
-        name: ing.name,
-        notes: ing.notes || null,
+        name: titleCase(ing.name),
+        notes: ing.notes ? titleCase(ing.notes) : null,
       }))
     );
     if (error) throw error;

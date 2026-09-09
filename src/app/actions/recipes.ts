@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { titleCase } from "@/lib/text";
 
 type IngredientInput = { amount: string; unit: string; name: string; notes: string };
 type StepInput = { body: string; photo_url: string };
@@ -21,18 +22,18 @@ export async function createRecipe(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const title = String(formData.get("title"));
+  const title = titleCase(String(formData.get("title")));
   const description = String(formData.get("description") || "");
   const servings = Number(formData.get("servings")) || 4;
   const prep = formData.get("prep_minutes") ? Number(formData.get("prep_minutes")) : null;
   const cook = formData.get("cook_minutes") ? Number(formData.get("cook_minutes")) : null;
   const tags = String(formData.get("tags") || "")
     .split(",")
-    .map((t) => t.trim())
+    .map((t) => titleCase(t.trim()))
     .filter(Boolean);
   const equipment = String(formData.get("equipment") || "")
     .split(",")
-    .map((t) => t.trim())
+    .map((t) => titleCase(t.trim()))
     .filter(Boolean);
   const videoUrl = String(formData.get("video_url") || "") || null;
   const isPublished = formData.get("is_published") === "on";
@@ -92,18 +93,18 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
     });
   }
 
-  const title = String(formData.get("title"));
+  const title = titleCase(String(formData.get("title")));
   const description = String(formData.get("description") || "");
   const servings = Number(formData.get("servings")) || 4;
   const prep = formData.get("prep_minutes") ? Number(formData.get("prep_minutes")) : null;
   const cook = formData.get("cook_minutes") ? Number(formData.get("cook_minutes")) : null;
   const tags = String(formData.get("tags") || "")
     .split(",")
-    .map((t) => t.trim())
+    .map((t) => titleCase(t.trim()))
     .filter(Boolean);
   const equipment = String(formData.get("equipment") || "")
     .split(",")
-    .map((t) => t.trim())
+    .map((t) => titleCase(t.trim()))
     .filter(Boolean);
   const videoUrl = String(formData.get("video_url") || "") || null;
   const isPublished = formData.get("is_published") === "on";
@@ -155,8 +156,8 @@ async function writeChildren(
         position: i,
         amount: ing.amount ? Number(ing.amount) : null,
         unit: ing.unit || null,
-        name: ing.name,
-        notes: ing.notes || null,
+        name: titleCase(ing.name),
+        notes: ing.notes ? titleCase(ing.notes) : null,
       }))
     );
   }
