@@ -18,10 +18,12 @@ export function ServingScaler({
   baseServings,
   servingUnit = "Serving",
   ingredients,
+  showServings = true,
 }: {
   baseServings: number;
   servingUnit?: string;
   ingredients: Ingredient[];
+  showServings?: boolean;
 }) {
   const [servings, setServings] = useState(baseServings || 1);
   const factor = servings / (baseServings || 1);
@@ -37,32 +39,34 @@ export function ServingScaler({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-3">
-          <span className="text-base font-medium">Servings</span>
-          <input
-            type="range"
-            min={1}
-            max={Math.max(baseServings * 4, 12)}
-            value={servings}
-            onChange={(e) => setServings(Number(e.target.value))}
-            className="w-32 accent-[var(--accent)]"
-          />
-          <input
-            type="number"
-            min={1}
-            value={servings}
-            onChange={(e) => setServings(Math.max(1, Number(e.target.value) || 1))}
-            className="w-16 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-base"
-          />
+      {showServings && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <span className="text-base font-medium">Servings</span>
+            <input
+              type="range"
+              min={1}
+              max={Math.max(baseServings * 4, 12)}
+              value={servings}
+              onChange={(e) => setServings(Number(e.target.value))}
+              className="w-32 accent-[var(--accent)]"
+            />
+            <input
+              type="number"
+              min={1}
+              value={servings}
+              onChange={(e) => setServings(Math.max(1, Number(e.target.value) || 1))}
+              className="w-16 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-base"
+            />
+          </div>
+          <p className="text-sm text-[var(--text-muted)]">
+            = {servings} {pluralize(servingUnit, servings)}
+          </p>
         </div>
-        <p className="text-sm text-[var(--text-muted)]">
-          = {servings} {pluralize(servingUnit, servings)}
-        </p>
-      </div>
-      <ul className="flex flex-col gap-2.5">
+      )}
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-6 gap-y-3">
         {scaled.map((ing) => (
-          <li key={ing.id} className="flex flex-wrap items-baseline gap-2 text-base">
+          <li key={ing.id} className="flex flex-wrap items-baseline gap-2 text-base before:mr-1 before:text-[var(--text-muted)] before:content-['·']">
             <span className="min-w-[4.5rem] font-medium text-[var(--accent)]">
               {ing.amount != null ? formatAmount(ing.amount) : ""} {ing.unit ?? ""}
             </span>

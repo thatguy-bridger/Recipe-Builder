@@ -25,6 +25,7 @@ export function CookMode({
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [current, setCurrent] = useState(0);
   const [extraSteps, setExtraSteps] = useState(1); // additional steps beyond the guaranteed neighbors
+  const [showServings, setShowServings] = useState(true);
   const dragging = useRef(false);
 
   const onDrag = useCallback((e: MouseEvent) => {
@@ -60,10 +61,24 @@ export function CookMode({
             equipment.length > 0 ? "flex-[2]" : "flex-1"
           }`}
         >
-          <h2 className="mb-3 shrink-0 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            Ingredients
-          </h2>
-          <ServingScaler baseServings={baseServings} servingUnit={servingUnit} ingredients={ingredients} />
+          <div className="mb-3 flex shrink-0 items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              Ingredients
+            </h2>
+            <button
+              type="button"
+              onClick={() => setShowServings((v) => !v)}
+              className="rounded-full border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
+            >
+              {showServings ? "Hide servings ▴" : "Show servings ▾"}
+            </button>
+          </div>
+          <ServingScaler
+            baseServings={baseServings}
+            servingUnit={servingUnit}
+            ingredients={ingredients}
+            showServings={showServings}
+          />
         </div>
 
         {equipment.length > 0 && (
@@ -71,9 +86,11 @@ export function CookMode({
             <h2 className="mb-3 shrink-0 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               Equipment
             </h2>
-            <ul className="flex flex-col gap-1.5 text-base">
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-x-6 gap-y-1.5 text-base">
               {equipment.map((eq) => (
-                <li key={eq}>{eq}</li>
+                <li key={eq} className="before:mr-1 before:text-[var(--text-muted)] before:content-['·']">
+                  {eq}
+                </li>
               ))}
             </ul>
           </div>

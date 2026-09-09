@@ -22,8 +22,13 @@ export async function NavBar() {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--bg)]/90 backdrop-blur">
       <div className="flex w-full items-center justify-between px-4 py-3 sm:px-6">
-        <Link href="/" className="font-serif text-lg font-semibold tracking-tight">
-          🍲 The Recipe Box
+        <Link
+          href="/"
+          className="flex items-center gap-2 font-serif text-lg font-semibold tracking-tight"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="" className="h-7 w-7" />
+          The Recipe Box
         </Link>
         <nav className="flex items-center gap-4 text-sm">
           <Link href="/" className="text-[var(--text-muted)] hover:text-[var(--text)]">
