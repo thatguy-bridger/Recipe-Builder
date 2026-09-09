@@ -23,10 +23,12 @@ export function CookMode({
   steps: Step[];
 }) {
   const [sidebarWidth, setSidebarWidth] = useState(400);
+  const [ingredientsHeight, setIngredientsHeight] = useState(360);
   const [current, setCurrent] = useState(0);
   const [extraSteps, setExtraSteps] = useState(1); // additional steps beyond the guaranteed neighbors
   const [showServings, setShowServings] = useState(true);
   const dragging = useRef(false);
+  const asideRef = useRef<HTMLElement>(null);
 
   const onDrag = useCallback((e: MouseEvent) => {
     if (!dragging.current) return;
@@ -44,6 +46,24 @@ export function CookMode({
     window.addEventListener("mouseup", stop);
   };
 
+  const onDragHeight = useCallback((e: MouseEvent) => {
+    if (!dragging.current || !asideRef.current) return;
+    const top = asideRef.current.getBoundingClientRect().top;
+    const total = asideRef.current.getBoundingClientRect().height;
+    setIngredientsHeight(Math.min(total - 120, Math.max(120, e.clientY - top)));
+  }, []);
+
+  const startDragHeight = () => {
+    dragging.current = true;
+    const stop = () => {
+      dragging.current = false;
+      window.removeEventListener("mousemove", onDragHeight);
+      window.removeEventListener("mouseup", stop);
+    };
+    window.addEventListener("mousemove", onDragHeight);
+    window.addEventListener("mouseup", stop);
+  };
+
   // Always guarantee the previous and next step are visible, no matter the
   // window size setting — extraSteps only adds further out from that floor.
   const start = Math.max(0, current - 1 - Math.floor(extraSteps / 2));
@@ -53,13 +73,13 @@ export function CookMode({
   return (
     <div className="flex h-[calc(100vh-57px)] w-full overflow-hidden">
       <aside
+        ref={asideRef}
         style={{ width: sidebarWidth }}
         className="flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] text-base"
       >
         <div
-          className={`flex min-h-0 flex-col overflow-y-auto p-6 ${
-            equipment.length > 0 ? "flex-[2]" : "flex-1"
-          }`}
+          style={equipment.length > 0 ? { height: ingredientsHeight } : undefined}
+          className={`flex min-h-0 flex-col overflow-y-auto p-6 ${equipment.length > 0 ? "shrink-0" : "flex-1"}`}
         >
           <div className="mb-3 flex shrink-0 items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
@@ -82,18 +102,27 @@ export function CookMode({
         </div>
 
         {equipment.length > 0 && (
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto border-t border-[var(--border)] p-6">
+          <>
+            <div
+              onMouseDown={startDragHeight}
+              className="h-1.5 shrink-0 cursor-row-resize border-t border-[var(--border)] bg-[var(--border)] hover:bg-[var(--accent)]"
+            />
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
             <h2 className="mb-3 shrink-0 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               Equipment
             </h2>
-            <ul className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-x-6 gap-y-1.5 text-base">
+            <ul className="[column-gap:1.5rem] [column-width:160px] text-base">
               {equipment.map((eq) => (
-                <li key={eq} className="before:mr-1 before:text-[var(--text-muted)] before:content-['·']">
+                <li
+                  key={eq}
+                  className="mb-1.5 min-w-0 break-words break-inside-avoid before:mr-1 before:text-[var(--text-muted)] before:content-['·']"
+                >
                   {eq}
                 </li>
               ))}
             </ul>
-          </div>
+            </div>
+          </>
         )}
       </aside>
 

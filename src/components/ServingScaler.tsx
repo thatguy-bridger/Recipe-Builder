@@ -64,13 +64,16 @@ export function ServingScaler({
           </p>
         </div>
       )}
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-6 gap-y-3">
+      <ul className="[column-gap:1.5rem] [column-width:200px]">
         {scaled.map((ing) => (
-          <li key={ing.id} className="flex flex-wrap items-baseline gap-2 text-base before:mr-1 before:text-[var(--text-muted)] before:content-['·']">
-            <span className="min-w-[4.5rem] font-medium text-[var(--accent)]">
+          <li
+            key={ing.id}
+            className="mb-3 flex min-w-0 flex-wrap items-baseline gap-2 text-base break-inside-avoid before:mr-1 before:text-[var(--text-muted)] before:content-['·']"
+          >
+            <span className="shrink-0 font-medium text-[var(--accent)]">
               {ing.amount != null ? formatAmount(ing.amount) : ""} {ing.unit ?? ""}
             </span>
-            <span>{ing.name}</span>
+            <span className="min-w-0 break-words">{ing.name}</span>
             {ing.notes && (
               <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-[var(--accent)] shadow-[0_0_8px_var(--accent)]">
                 {ing.notes}
