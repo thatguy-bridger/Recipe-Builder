@@ -28,7 +28,7 @@ export async function NavBar() {
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="" className="h-7 w-7" />
-          The Recipe Box
+          Recipe Boxed
         </Link>
         <nav className="flex items-center gap-4 text-sm">
           <Link href="/" className="text-[var(--text-muted)] hover:text-[var(--text)]">

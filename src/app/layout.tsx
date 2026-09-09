@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "The Recipe Box",
+  title: "Recipe Boxed",
   description: "A shared home for every recipe, from the kitchen to the classroom.",
 };
 
