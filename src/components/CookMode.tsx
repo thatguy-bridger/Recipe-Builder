@@ -53,28 +53,22 @@ export function CookMode({
     <div className="flex h-[calc(100vh-57px)] w-full overflow-hidden">
       <aside
         style={{ width: sidebarWidth }}
-        className="flex shrink-0 flex-col gap-8 overflow-y-auto border-r border-[var(--border)] bg-[var(--bg-elevated)] p-6 text-base"
+        className="flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] text-base"
       >
-        <div>
-          <Link
-            href={`/recipes/${recipeId}`}
-            className="text-sm text-[var(--text-muted)] hover:text-[var(--text)]"
-          >
-            &larr; Exit cook mode
-          </Link>
-          <h1 className="mt-2 font-serif text-2xl font-semibold">{title}</h1>
-        </div>
-
-        <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        <div
+          className={`flex min-h-0 flex-col overflow-y-auto p-6 ${
+            equipment.length > 0 ? "flex-[2]" : "flex-1"
+          }`}
+        >
+          <h2 className="mb-3 shrink-0 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
             Ingredients
           </h2>
           <ServingScaler baseServings={baseServings} servingUnit={servingUnit} ingredients={ingredients} />
         </div>
 
         {equipment.length > 0 && (
-          <div>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto border-t border-[var(--border)] p-6">
+            <h2 className="mb-3 shrink-0 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               Equipment
             </h2>
             <ul className="flex flex-col gap-1.5 text-base">
@@ -94,9 +88,18 @@ export function CookMode({
       <section className="flex flex-1 flex-col overflow-y-auto p-8">
         <div className="flex w-full flex-1 flex-col gap-8">
           <div className="flex items-center justify-between">
-            <span className="text-base text-[var(--text-muted)]">
-              Step {current + 1} of {steps.length}
-            </span>
+            <div>
+              <Link
+                href={`/recipes/${recipeId}`}
+                className="text-sm text-[var(--text-muted)] hover:text-[var(--text)]"
+              >
+                &larr; Exit cook mode
+              </Link>
+              <h1 className="font-serif text-xl font-semibold">{title}</h1>
+              <span className="text-sm text-[var(--text-muted)]">
+                Step {current + 1} of {steps.length}
+              </span>
+            </div>
             <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
               Show
               <select
