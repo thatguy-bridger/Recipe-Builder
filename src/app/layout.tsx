@@ -25,6 +25,12 @@ export const metadata: Metadata = {
     apple: iconUrl,
     shortcut: iconUrl,
   },
+  // This is a private class tool, not a public site — keep it out of search
+  // engines even though recipes are readable without signing in.
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 const themeInitScript = `

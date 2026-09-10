@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import Link from "next/link";
 import type { Ingredient, Step } from "@/types/recipe";
 import { ServingScaler } from "./ServingScaler";
@@ -76,56 +83,54 @@ export function CookMode({
     setIngredientsHeight(Math.min(total - 120, Math.max(120, proportional)));
   }, [ingredients, equipment, showServings]);
 
-  const onDrag = useCallback((e: MouseEvent) => {
+  const onDrag = useCallback((e: ReactPointerEvent) => {
     if (!dragging.current) return;
     setSidebarWidth(Math.min(640, Math.max(300, e.clientX)));
   }, []);
 
-  const startDrag = () => {
+  const startDrag = (e: ReactPointerEvent) => {
     dragging.current = true;
-    const stop = () => {
-      dragging.current = false;
-      widthManual.current = true;
-      setSidebarWidth((w) => {
-        try {
-          localStorage.setItem(widthStorageKey, String(w));
-        } catch {
-          // ignore
-        }
-        return w;
-      });
-      window.removeEventListener("mousemove", onDrag);
-      window.removeEventListener("mouseup", stop);
-    };
-    window.addEventListener("mousemove", onDrag);
-    window.addEventListener("mouseup", stop);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  const onDragHeight = useCallback((e: MouseEvent) => {
+  const stopDrag = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    widthManual.current = true;
+    setSidebarWidth((w) => {
+      try {
+        localStorage.setItem(widthStorageKey, String(w));
+      } catch {
+        // ignore
+      }
+      return w;
+    });
+  };
+
+  const onDragHeight = useCallback((e: ReactPointerEvent) => {
     if (!dragging.current || !asideRef.current) return;
     const top = asideRef.current.getBoundingClientRect().top;
     const total = asideRef.current.getBoundingClientRect().height;
     setIngredientsHeight(Math.min(total - 120, Math.max(120, e.clientY - top)));
   }, []);
 
-  const startDragHeight = () => {
+  const startDragHeight = (e: ReactPointerEvent) => {
     dragging.current = true;
-    const stop = () => {
-      dragging.current = false;
-      heightManual.current = true;
-      setIngredientsHeight((h) => {
-        try {
-          localStorage.setItem(splitStorageKey, String(h));
-        } catch {
-          // ignore
-        }
-        return h;
-      });
-      window.removeEventListener("mousemove", onDragHeight);
-      window.removeEventListener("mouseup", stop);
-    };
-    window.addEventListener("mousemove", onDragHeight);
-    window.addEventListener("mouseup", stop);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const stopDragHeight = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    heightManual.current = true;
+    setIngredientsHeight((h) => {
+      try {
+        localStorage.setItem(splitStorageKey, String(h));
+      } catch {
+        // ignore
+      }
+      return h;
+    });
   };
 
   // Always guarantee the previous and next step are visible, no matter the
@@ -173,8 +178,11 @@ export function CookMode({
         {equipment.length > 0 && (
           <>
             <div
-              onMouseDown={startDragHeight}
-              className="h-1.5 shrink-0 cursor-row-resize border-t border-[var(--border)] bg-[var(--border)] hover:bg-[var(--accent)]"
+              onPointerDown={startDragHeight}
+              onPointerMove={onDragHeight}
+              onPointerUp={stopDragHeight}
+              onPointerCancel={stopDragHeight}
+              className="h-2.5 shrink-0 touch-none cursor-row-resize border-t border-[var(--border)] bg-[var(--border)] hover:bg-[var(--accent)]"
             />
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
             <div ref={equipmentContentRef} className="flex min-h-0 flex-col">
@@ -198,8 +206,11 @@ export function CookMode({
       </aside>
 
       <div
-        onMouseDown={startDrag}
-        className="sticky top-[57px] h-[calc(100vh-57px)] w-1.5 shrink-0 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)]"
+        onPointerDown={startDrag}
+        onPointerMove={onDrag}
+        onPointerUp={stopDrag}
+        onPointerCancel={stopDrag}
+        className="sticky top-[57px] h-[calc(100vh-57px)] w-2.5 shrink-0 touch-none cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)]"
       />
 
       <section className="flex flex-1 flex-col p-8 pb-24">
