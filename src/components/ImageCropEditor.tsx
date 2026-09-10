@@ -7,11 +7,15 @@ type Offset = { x: number; y: number };
 export function ImageCropEditor({
   src,
   aspect,
+  outputWidth = 1200,
+  quality = 0.92,
   onCancel,
   onSave,
 }: {
   src: string;
   aspect: number; // width / height
+  outputWidth?: number;
+  quality?: number;
   onCancel: () => void;
   onSave: (blob: Blob) => void;
 }) {
@@ -95,7 +99,7 @@ export function ImageCropEditor({
     const sy = -offset.y / scale;
     const sw = frameSize.w / scale;
     const sh = frameSize.h / scale;
-    const outputW = 1200;
+    const outputW = outputWidth;
     const outputH = Math.round(outputW / aspect);
     const canvas = document.createElement("canvas");
     canvas.width = outputW;
@@ -112,7 +116,7 @@ export function ImageCropEditor({
         if (blob) onSave(blob);
       },
       "image/jpeg",
-      0.92
+      quality
     );
   }
 

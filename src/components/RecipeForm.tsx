@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import type { RecipeWithDetails } from "@/types/recipe";
 import { EditableImage } from "./EditableImage";
+import { PhotoPicker } from "./PhotoPicker";
 import { SubmitButton } from "./SubmitButton";
 
 type IngredientRow = { amount: string; unit: string; name: string; category: string; note: string };
@@ -12,19 +12,6 @@ type DragKind = "ingredient" | "step" | "category";
 type DragState = { kind: DragKind; index: number; x: number; y: number; label: string };
 type Selection = { type: "ingredient" | "step"; index: number };
 type HistoryEntry = { ingredients: IngredientRow[]; steps: StepRow[] };
-
-async function uploadPhoto(file: File): Promise<string | null> {
-  const supabase = createClient();
-  const ext = file.name.split(".").pop();
-  const path = `${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from("recipe-photos").upload(path, file);
-  if (error) {
-    alert(`Upload failed: ${error.message}`);
-    return null;
-  }
-  const { data } = supabase.storage.from("recipe-photos").getPublicUrl(path);
-  return data.publicUrl;
-}
 
 function GripIcon() {
   return (
@@ -67,7 +54,6 @@ export function RecipeForm({
   const [photoUrls, setPhotoUrls] = useState<string[]>(
     initial?.recipe_photos?.sort((a, b) => a.position - b.position).map((p) => p.url) ?? []
   );
-  const [uploading, setUploading] = useState(false);
   const [categories, setCategories] = useState<string[]>(() =>
     Array.from(
       new Set((initial?.recipe_ingredients ?? []).map((i) => i.category?.trim()).filter(Boolean))
@@ -383,6 +369,7 @@ export function RecipeForm({
                 <EditableImage
                   src={url}
                   aspect={i === 0 ? 4 / 3 : 1}
+                  outputWidth={i === 0 ? 2000 : 1200}
                   className="h-24 w-24"
                   onChange={(newUrl) =>
                     setPhotoUrls((urls) => urls.map((u, idx) => (idx === i ? newUrl : u)))
@@ -403,22 +390,16 @@ export function RecipeForm({
                 </button>
               </div>
             ))}
-            <label className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-lg border border-dashed border-[var(--border)] text-xs text-[var(--text-muted)]">
-              {uploading ? "..." : "+ Add"}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  setUploading(true);
-                  const url = await uploadPhoto(file);
-                  if (url) setPhotoUrls((p) => [...p, url]);
-                  setUploading(false);
-                }}
-              />
-            </label>
+            <PhotoPicker
+              aspect={photoUrls.length === 0 ? 4 / 3 : 1}
+              outputWidth={photoUrls.length === 0 ? 2000 : 1200}
+              multiple
+              onAdd={(url) => setPhotoUrls((p) => [...p, url])}
+            >
+              <div className="flex h-24 w-24 items-center justify-center rounded-lg border border-dashed border-[var(--border)] text-xs text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">
+                + Add
+              </div>
+            </PhotoPicker>
           </div>
         </section>
 
@@ -666,23 +647,19 @@ export function RecipeForm({
                         }
                       />
                     )}
-                    <label className="cursor-pointer text-xs text-[var(--accent)] hover:underline">
-                      {step.photo_url ? "Replace photo" : "+ Add photo"}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          const url = await uploadPhoto(file);
-                          if (url)
-                            setSteps((rows) =>
-                              rows.map((r, idx) => (idx === i ? { ...r, photo_url: url } : r))
-                            );
-                        }}
-                      />
-                    </label>
+                    <PhotoPicker
+                      aspect={1}
+                      outputWidth={800}
+                      onAdd={(url) =>
+                        setSteps((rows) =>
+                          rows.map((r, idx) => (idx === i ? { ...r, photo_url: url } : r))
+                        )
+                      }
+                    >
+                      <span className="text-xs text-[var(--accent)] hover:underline">
+                        {step.photo_url ? "Replace photo" : "+ Add photo"}
+                      </span>
+                    </PhotoPicker>
                     <button
                       type="button"
                       onClick={() =>

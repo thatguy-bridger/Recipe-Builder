@@ -8,12 +8,14 @@ export function EditableImage({
   src,
   alt = "",
   aspect,
+  outputWidth = 1200,
   className,
   onChange,
 }: {
   src: string;
   alt?: string;
   aspect: number;
+  outputWidth?: number;
   className?: string;
   onChange: (newUrl: string) => void;
 }) {
@@ -54,6 +56,7 @@ export function EditableImage({
         <ImageCropEditor
           src={src}
           aspect={aspect}
+          outputWidth={outputWidth}
           onCancel={() => setEditing(false)}
           onSave={handleSave}
         />
