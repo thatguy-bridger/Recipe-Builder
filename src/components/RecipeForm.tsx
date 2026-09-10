@@ -12,6 +12,11 @@ type DragKind = "ingredient" | "step" | "category";
 type DragState = { kind: DragKind; index: number; x: number; y: number; label: string };
 type Selection = { type: "ingredient" | "step"; index: number };
 type HistoryEntry = { ingredients: IngredientRow[]; steps: StepRow[] };
+type ImageSlot = { type: "recipe"; index: number } | { type: "step"; index: number } | { type: "recipe-new" };
+
+function imageSlotKey(slot: ImageSlot): string {
+  return slot.type === "recipe-new" ? "recipe-new" : `${slot.type}:${slot.index}`;
+}
 
 function GripIcon() {
   return (
@@ -68,6 +73,87 @@ export function RecipeForm({
   const [dragOverIngredientIndex, setDragOverIngredientIndex] = useState<number | null>(null);
   const [dragOverStepIndex, setDragOverStepIndex] = useState<number | null>(null);
   const [dragOverCategoryIndex, setDragOverCategoryIndex] = useState<number | null>(null);
+
+  // Native HTML5 drag-and-drop lets any photo (recipe photo or step photo) be
+  // dragged onto any other photo slot — including across sections — to swap
+  // or move it. Separate from the pointer-drag engine above, which only
+  // reorders list items in place.
+  const [draggingImage, setDraggingImage] = useState<ImageSlot | null>(null);
+  const [imageDragOverKey, setImageDragOverKey] = useState<string | null>(null);
+
+  function getImageSlotUrl(slot: ImageSlot): string {
+    if (slot.type === "recipe") return photoUrls[slot.index] ?? "";
+    if (slot.type === "step") return steps[slot.index]?.photo_url ?? "";
+    return "";
+  }
+
+  function moveImage(source: ImageSlot, target: ImageSlot) {
+    if (source.type === "recipe-new") return;
+    const sourceUrl = getImageSlotUrl(source);
+    if (!sourceUrl) return;
+    if (imageSlotKey(source) === imageSlotKey(target)) return;
+    const targetUrl = getImageSlotUrl(target);
+
+    if (target.type === "recipe-new") {
+      setPhotoUrls((urls) => [...urls, sourceUrl]);
+    } else if (target.type === "recipe") {
+      setPhotoUrls((urls) => urls.map((u, idx) => (idx === target.index ? sourceUrl : u)));
+    } else {
+      setSteps((rows) => rows.map((r, idx) => (idx === target.index ? { ...r, photo_url: sourceUrl } : r)));
+    }
+
+    if (source.type === "recipe") {
+      if (targetUrl) {
+        setPhotoUrls((urls) => urls.map((u, idx) => (idx === source.index ? targetUrl : u)));
+      } else {
+        setPhotoUrls((urls) => urls.filter((_, idx) => idx !== source.index));
+      }
+    } else {
+      setSteps((rows) => rows.map((r, idx) => (idx === source.index ? { ...r, photo_url: targetUrl } : r)));
+    }
+  }
+
+  function imageDragHandlers(slot: ImageSlot, hasImage: boolean) {
+    const key = imageSlotKey(slot);
+    return {
+      draggable: hasImage,
+      onDragStart: (e: React.DragEvent) => {
+        e.dataTransfer.effectAllowed = "move";
+        // The source slot travels on the drag itself rather than in React
+        // state, since dragover/drop can fire before a setState from
+        // dragstart has re-rendered (e.g. on a fast drag).
+        e.dataTransfer.setData("application/json", JSON.stringify(slot));
+        setDraggingImage(slot);
+      },
+      onDragEnd: () => {
+        setDraggingImage(null);
+        setImageDragOverKey(null);
+      },
+      onDragOver: (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes("application/json")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setImageDragOverKey(key);
+      },
+      onDragLeave: () => {
+        setImageDragOverKey((k) => (k === key ? null : k));
+      },
+      onDrop: (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes("application/json")) return;
+        e.preventDefault();
+        const raw = e.dataTransfer.getData("application/json");
+        if (raw) {
+          try {
+            moveImage(JSON.parse(raw) as ImageSlot, slot);
+          } catch {
+            // ignore malformed drag payloads
+          }
+        }
+        setDraggingImage(null);
+        setImageDragOverKey(null);
+      },
+    };
+  }
 
   function addCategory() {
     const name = newCategory.trim();
@@ -361,42 +447,62 @@ export function RecipeForm({
           <h2 className="mb-3 font-serif text-lg font-semibold">Photos</h2>
           <p className="mb-3 text-xs text-[var(--text-muted)]">
             The first photo is the recipe&apos;s icon — it&apos;s what shows up on cards and in
-            search. Use the pencil on any photo to reposition or crop it.
+            search. Use the pencil on any photo to reposition or crop it, or drag any photo (here
+            or on a step below) onto another slot to move or swap it.
           </p>
           <div className="flex flex-wrap gap-3">
-            {photoUrls.map((url, i) => (
-              <div key={url} className="relative h-24 w-24">
-                <EditableImage
-                  src={url}
-                  aspect={i === 0 ? 4 / 3 : 1}
-                  outputWidth={i === 0 ? 2000 : 1200}
-                  className="h-24 w-24"
-                  onChange={(newUrl) =>
-                    setPhotoUrls((urls) => urls.map((u, idx) => (idx === i ? newUrl : u)))
-                  }
-                />
-                {i === 0 && (
-                  <span className="pointer-events-none absolute left-1 top-1 rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-medium text-white">
-                    Icon
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setPhotoUrls((p) => p.filter((_, idx) => idx !== i))}
-                  aria-label="Remove photo"
-                  className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--danger)] text-xs text-white"
+            {photoUrls.map((url, i) => {
+              const slot: ImageSlot = { type: "recipe", index: i };
+              const key = imageSlotKey(slot);
+              return (
+                <div
+                  key={url}
+                  {...imageDragHandlers(slot, true)}
+                  className={`relative h-24 w-24 rounded-lg transition-shadow ${
+                    imageDragOverKey === key ? "ring-2 ring-[var(--accent)]" : ""
+                  } ${draggingImage && imageSlotKey(draggingImage) === key ? "opacity-40" : ""} ${
+                    draggingImage ? "cursor-grabbing" : "cursor-grab"
+                  }`}
                 >
-                  ×
-                </button>
-              </div>
-            ))}
+                  <EditableImage
+                    src={url}
+                    aspect={i === 0 ? 4 / 3 : 1}
+                    outputWidth={i === 0 ? 2000 : 1200}
+                    className="h-24 w-24"
+                    onChange={(newUrl) =>
+                      setPhotoUrls((urls) => urls.map((u, idx) => (idx === i ? newUrl : u)))
+                    }
+                  />
+                  {i === 0 && (
+                    <span className="pointer-events-none absolute left-1 top-1 rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-medium text-white">
+                      Icon
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setPhotoUrls((p) => p.filter((_, idx) => idx !== i))}
+                    aria-label="Remove photo"
+                    className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--danger)] text-xs text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
             <PhotoPicker
               aspect={photoUrls.length === 0 ? 4 / 3 : 1}
               outputWidth={photoUrls.length === 0 ? 2000 : 1200}
               multiple
               onAdd={(url) => setPhotoUrls((p) => [...p, url])}
             >
-              <div className="flex h-24 w-24 items-center justify-center rounded-lg border border-dashed border-[var(--border)] text-xs text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">
+              <div
+                {...imageDragHandlers({ type: "recipe-new" }, false)}
+                className={`flex h-24 w-24 items-center justify-center rounded-lg border border-dashed text-xs transition-colors ${
+                  imageDragOverKey === "recipe-new"
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                }`}
+              >
                 + Add
               </div>
             </PhotoPicker>
@@ -635,18 +741,37 @@ export function RecipeForm({
                     className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm"
                   />
                   <div className="flex flex-wrap items-center gap-3">
-                    {step.photo_url && (
-                      <EditableImage
-                        src={step.photo_url}
-                        aspect={1}
-                        className="h-12 w-12"
-                        onChange={(newUrl) =>
-                          setSteps((rows) =>
-                            rows.map((r, idx) => (idx === i ? { ...r, photo_url: newUrl } : r))
-                          )
-                        }
-                      />
-                    )}
+                    <div
+                      {...imageDragHandlers({ type: "step", index: i }, Boolean(step.photo_url))}
+                      className={`h-12 w-12 rounded-lg transition-shadow ${
+                        imageDragOverKey === `step:${i}` ? "ring-2 ring-[var(--accent)]" : ""
+                      } ${
+                        draggingImage && imageSlotKey(draggingImage) === `step:${i}`
+                          ? "opacity-40"
+                          : ""
+                      } ${
+                        step.photo_url
+                          ? draggingImage
+                            ? "cursor-grabbing"
+                            : "cursor-grab"
+                          : draggingImage
+                            ? "border border-dashed border-[var(--border)]"
+                            : ""
+                      }`}
+                    >
+                      {step.photo_url && (
+                        <EditableImage
+                          src={step.photo_url}
+                          aspect={1}
+                          className="h-12 w-12"
+                          onChange={(newUrl) =>
+                            setSteps((rows) =>
+                              rows.map((r, idx) => (idx === i ? { ...r, photo_url: newUrl } : r))
+                            )
+                          }
+                        />
+                      )}
+                    </div>
                     <PhotoPicker
                       aspect={1}
                       outputWidth={800}
