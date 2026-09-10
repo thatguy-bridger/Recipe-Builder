@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { ThemeToggle } from "./ThemeToggle";
+import { ContentScaler } from "./ContentScaler";
 import { signOut } from "@/app/actions/auth";
 
 export async function NavBar() {
@@ -21,19 +22,22 @@ export async function NavBar() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--bg)]/90 backdrop-blur">
-      <div className="flex w-full items-center justify-between px-4 py-3 sm:px-6">
-        <Link
-          href="/"
-          className="flex items-center gap-2 font-serif text-lg font-semibold tracking-tight"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="https://pfobqnctixdpdzzrtriu.supabase.co/storage/v1/object/public/recipe-photos/brand/logo-64.png"
-            alt=""
-            className="h-7 w-7"
-          />
-          Recipe Boxed
-        </Link>
+      <div className="flex w-full items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="flex items-center gap-2 font-serif text-lg font-semibold tracking-tight"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://pfobqnctixdpdzzrtriu.supabase.co/storage/v1/object/public/recipe-photos/brand/logo-64.png"
+              alt=""
+              className="h-7 w-7"
+            />
+            Recipe Boxed
+          </Link>
+          <ContentScaler />
+        </div>
         <nav className="flex items-center gap-4 text-sm">
           <Link href="/" className="text-[var(--text-muted)] hover:text-[var(--text)]">
             Browse

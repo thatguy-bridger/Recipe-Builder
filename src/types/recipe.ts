@@ -13,7 +13,8 @@ export type Ingredient = {
   amount: number | null;
   unit: string | null;
   name: string;
-  notes: string | null;
+  category: string | null;
+  note: string | null;
 };
 
 export type Step = {
@@ -22,6 +23,7 @@ export type Step = {
   position: number;
   body: string;
   photo_url: string | null;
+  is_pinned: boolean;
 };
 
 export type Photo = {
@@ -38,8 +40,8 @@ export type Recipe = {
   description: string | null;
   servings: number | null;
   serving_unit: string;
-  prep_minutes: number | null;
-  cook_minutes: number | null;
+  prep_minutes: string | null;
+  cook_minutes: string | null;
   tags: string[];
   equipment: string[];
   video_url: string | null;

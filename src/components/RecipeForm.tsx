@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { RecipeWithDetails } from "@/types/recipe";
+import { EditableImage } from "./EditableImage";
 
-type IngredientRow = { amount: string; unit: string; name: string; notes: string };
-type StepRow = { body: string; photo_url: string };
+type IngredientRow = { amount: string; unit: string; name: string; category: string; note: string };
+type StepRow = { body: string; photo_url: string; is_pinned: boolean };
+type DragPayload = { type: "ingredient" | "step"; index: number };
 
 async function uploadPhoto(file: File): Promise<string | null> {
   const supabase = createClient();
@@ -18,6 +20,46 @@ async function uploadPhoto(file: File): Promise<string | null> {
   }
   const { data } = supabase.storage.from("recipe-photos").getPublicUrl(path);
   return data.publicUrl;
+}
+
+function setDragPayload(e: React.DragEvent, payload: DragPayload) {
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", JSON.stringify(payload));
+}
+
+function readDragPayload(e: React.DragEvent): DragPayload | null {
+  try {
+    const data = JSON.parse(e.dataTransfer.getData("text/plain") || "{}");
+    if (data && (data.type === "ingredient" || data.type === "step")) return data;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Give the dragged element a real drag preview (the whole card, not just the
+// tiny grip glyph) by pointing the browser's drag image at an ancestor.
+function useCardDragImage() {
+  return (e: React.DragEvent, selector: string) => {
+    const card = (e.target as HTMLElement).closest(selector) as HTMLElement | null;
+    if (card) {
+      const rect = card.getBoundingClientRect();
+      e.dataTransfer.setDragImage(card, e.clientX - rect.left, e.clientY - rect.top);
+    }
+  };
+}
+
+function GripIcon() {
+  return (
+    <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">
+      <circle cx="2" cy="2" r="1.4" />
+      <circle cx="8" cy="2" r="1.4" />
+      <circle cx="2" cy="8" r="1.4" />
+      <circle cx="8" cy="8" r="1.4" />
+      <circle cx="2" cy="14" r="1.4" />
+      <circle cx="8" cy="14" r="1.4" />
+    </svg>
+  );
 }
 
 export function RecipeForm({
@@ -34,20 +76,74 @@ export function RecipeForm({
         amount: i.amount != null ? String(i.amount) : "",
         unit: i.unit ?? "",
         name: i.name,
-        notes: i.notes ?? "",
-      })) ?? [{ amount: "", unit: "", name: "", notes: "" }]
+        category: i.category ?? "",
+        note: i.note ?? "",
+      })) ?? [{ amount: "", unit: "", name: "", category: "", note: "" }]
   );
   const [steps, setSteps] = useState<StepRow[]>(
     initial?.recipe_steps
       ?.sort((a, b) => a.position - b.position)
-      .map((s) => ({ body: s.body, photo_url: s.photo_url ?? "" })) ?? [
-      { body: "", photo_url: "" },
+      .map((s) => ({ body: s.body, photo_url: s.photo_url ?? "", is_pinned: s.is_pinned })) ?? [
+      { body: "", photo_url: "", is_pinned: false },
     ]
   );
   const [photoUrls, setPhotoUrls] = useState<string[]>(
     initial?.recipe_photos?.sort((a, b) => a.position - b.position).map((p) => p.url) ?? []
   );
   const [uploading, setUploading] = useState(false);
+  const [categories, setCategories] = useState<string[]>(() =>
+    Array.from(
+      new Set((initial?.recipe_ingredients ?? []).map((i) => i.category?.trim()).filter(Boolean))
+    ) as string[]
+  );
+  const [newCategory, setNewCategory] = useState("");
+  const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
+  const [draggingIngredient, setDraggingIngredient] = useState<number | null>(null);
+  const [dragOverStep, setDragOverStep] = useState<number | null>(null);
+  const [draggingStep, setDraggingStep] = useState<number | null>(null);
+  const setCardDragImage = useCardDragImage();
+
+  function addCategory() {
+    const name = newCategory.trim();
+    if (!name || categories.includes(name)) {
+      setNewCategory("");
+      return;
+    }
+    setCategories((c) => [...c, name]);
+    setNewCategory("");
+  }
+
+  function removeCategory(name: string) {
+    setCategories((c) => c.filter((cat) => cat !== name));
+    setIngredients((rows) => rows.map((r) => (r.category === name ? { ...r, category: "" } : r)));
+  }
+
+  // Moves ingredient `from` to just before ingredient `to`, and assigns it
+  // to `category` (dropping it "into" that category's card).
+  function moveIngredient(from: number, to: number | null, category: string) {
+    setIngredients((rows) => {
+      const next = [...rows];
+      const [moved] = next.splice(from, 1);
+      moved.category = category;
+      if (to == null) {
+        next.push(moved);
+      } else {
+        const insertAt = to > from ? to - 1 : to;
+        next.splice(insertAt, 0, moved);
+      }
+      return next;
+    });
+  }
+
+  function reorderStep(from: number, to: number) {
+    if (from === to) return;
+    setSteps((rows) => {
+      const next = [...rows];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }
 
   return (
     <form
@@ -102,21 +198,19 @@ export function RecipeForm({
         </div>
         <div className="grid grid-cols-2 gap-4">
           <label className="flex flex-col gap-1 text-sm">
-            Prep (min)
+            Prep time
             <input
-              type="number"
               name="prep_minutes"
-              min={0}
+              placeholder="e.g. 15 or 10-12 min"
               defaultValue={initial?.prep_minutes ?? ""}
               className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 outline-none focus:border-[var(--accent)]"
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            Cook (min)
+            Cook time
             <input
-              type="number"
               name="cook_minutes"
-              min={0}
+              placeholder="e.g. 15 or 10-12 min"
               defaultValue={initial?.cook_minutes ?? ""}
               className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 outline-none focus:border-[var(--accent)]"
             />
@@ -159,11 +253,26 @@ export function RecipeForm({
 
       <section>
         <h2 className="mb-3 font-serif text-lg font-semibold">Photos</h2>
+        <p className="mb-3 text-xs text-[var(--text-muted)]">
+          The first photo is the recipe&apos;s icon — it&apos;s what shows up on cards and in
+          search. Use the pencil on any photo to reposition or crop it.
+        </p>
         <div className="flex flex-wrap gap-3">
           {photoUrls.map((url, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <div key={url} className="relative">
-              <img src={url} alt="" className="h-24 w-24 rounded-lg object-cover" />
+            <div key={url} className="relative h-24 w-24">
+              <EditableImage
+                src={url}
+                aspect={i === 0 ? 4 / 3 : 1}
+                className="h-24 w-24"
+                onChange={(newUrl) =>
+                  setPhotoUrls((urls) => urls.map((u, idx) => (idx === i ? newUrl : u)))
+                }
+              />
+              {i === 0 && (
+                <span className="pointer-events-none absolute left-1 top-1 rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-medium text-white">
+                  Icon
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setPhotoUrls((p) => p.filter((_, idx) => idx !== i))}
@@ -194,75 +303,228 @@ export function RecipeForm({
 
       <section>
         <h2 className="mb-3 font-serif text-lg font-semibold">Ingredients</h2>
-        <div className="flex flex-col gap-2">
-          {ingredients.map((ing, i) => (
-            <div key={i} className="grid grid-cols-[5rem_5rem_1fr_1fr_auto] gap-2">
-              <input
-                placeholder="Amt"
-                value={ing.amount}
-                onChange={(e) =>
-                  setIngredients((rows) =>
-                    rows.map((r, idx) => (idx === i ? { ...r, amount: e.target.value } : r))
-                  )
-                }
-                className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1.5 text-sm"
-              />
-              <input
-                placeholder="Unit"
-                value={ing.unit}
-                onChange={(e) =>
-                  setIngredients((rows) =>
-                    rows.map((r, idx) => (idx === i ? { ...r, unit: e.target.value } : r))
-                  )
-                }
-                className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1.5 text-sm"
-              />
-              <input
-                placeholder="Ingredient"
-                value={ing.name}
-                onChange={(e) =>
-                  setIngredients((rows) =>
-                    rows.map((r, idx) => (idx === i ? { ...r, name: e.target.value } : r))
-                  )
-                }
-                className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1.5 text-sm"
-              />
-              <input
-                placeholder="Notes"
-                value={ing.notes}
-                onChange={(e) =>
-                  setIngredients((rows) =>
-                    rows.map((r, idx) => (idx === i ? { ...r, notes: e.target.value } : r))
-                  )
-                }
-                className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1.5 text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => setIngredients((rows) => rows.filter((_, idx) => idx !== i))}
-                className="text-[var(--danger)]"
+        <p className="mb-3 text-xs text-[var(--text-muted)]">
+          Drag an ingredient by its grip and drop it anywhere inside a category card to move it
+          there. New ingredients start out in Uncategorized.
+        </p>
+
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+          {["", ...categories].map((cat) => {
+            const items = ingredients
+              .map((ing, i) => ({ ing, i }))
+              .filter(({ ing }) => (ing.category || "") === cat);
+
+            return (
+              <div
+                key={cat || "__uncat"}
+                data-category-card={cat || "__uncat"}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOverCategory(cat);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setDragOverCategory((c) => (c === cat ? null : c));
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOverCategory(null);
+                  const payload = readDragPayload(e);
+                  if (payload?.type === "ingredient") moveIngredient(payload.index, null, cat);
+                }}
+                className={`flex flex-col gap-2 rounded-[var(--radius)] border-2 p-3 transition-colors ${
+                  dragOverCategory === cat
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                    : "border-[var(--border)] bg-[var(--bg-muted)]"
+                }`}
               >
-                ×
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center justify-between">
+                  <h3 className="font-serif text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                    {cat || "Uncategorized"}
+                  </h3>
+                  {cat && (
+                    <button
+                      type="button"
+                      onClick={() => removeCategory(cat)}
+                      aria-label={`Remove category ${cat}`}
+                      className="text-[var(--danger)]"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {items.map(({ ing, i }) => (
+                    <div
+                      key={i}
+                      data-ingredient-card
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDragOverCategory(cat);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDragOverCategory(null);
+                        const payload = readDragPayload(e);
+                        if (payload?.type === "ingredient") moveIngredient(payload.index, i, cat);
+                      }}
+                      className={`flex flex-col gap-1.5 rounded-lg border p-2 transition-opacity ${
+                        draggingIngredient === i
+                          ? "border-[var(--accent)] opacity-40"
+                          : "border-[var(--border)] bg-[var(--bg-elevated)]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          draggable
+                          onDragStart={(e) => {
+                            setCardDragImage(e, "[data-ingredient-card]");
+                            setDraggingIngredient(i);
+                            setDragPayload(e, { type: "ingredient", index: i });
+                          }}
+                          onDragEnd={() => setDraggingIngredient(null)}
+                          className="flex shrink-0 cursor-grab items-center rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg-muted)] active:cursor-grabbing"
+                          aria-label="Drag to move or reorder"
+                          title="Drag to move between categories or reorder"
+                        >
+                          <GripIcon />
+                        </span>
+                        <input
+                          placeholder="Amt (e.g. 1 1/2)"
+                          value={ing.amount}
+                          onChange={(e) =>
+                            setIngredients((rows) =>
+                              rows.map((r, idx) => (idx === i ? { ...r, amount: e.target.value } : r))
+                            )
+                          }
+                          className="w-20 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-sm"
+                        />
+                        <input
+                          placeholder="Unit"
+                          value={ing.unit}
+                          onChange={(e) =>
+                            setIngredients((rows) =>
+                              rows.map((r, idx) => (idx === i ? { ...r, unit: e.target.value } : r))
+                            )
+                          }
+                          className="w-16 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setIngredients((rows) => rows.filter((_, idx) => idx !== i))}
+                          className="ml-auto shrink-0 text-[var(--danger)]"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <input
+                        placeholder="Ingredient"
+                        value={ing.name}
+                        onChange={(e) =>
+                          setIngredients((rows) =>
+                            rows.map((r, idx) => (idx === i ? { ...r, name: e.target.value } : r))
+                          )
+                        }
+                        className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-sm"
+                      />
+                      <input
+                        placeholder="Quick note (optional)"
+                        value={ing.note}
+                        onChange={(e) =>
+                          setIngredients((rows) =>
+                            rows.map((r, idx) => (idx === i ? { ...r, note: e.target.value } : r))
+                          )
+                        }
+                        className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIngredients((rows) => [
+                      ...rows,
+                      { amount: "", unit: "", name: "", category: cat, note: "" },
+                    ])
+                  }
+                  className="mt-1 text-sm text-[var(--accent)] hover:underline"
+                >
+                  + Add ingredient
+                </button>
+              </div>
+            );
+          })}
         </div>
-        <button
-          type="button"
-          onClick={() =>
-            setIngredients((rows) => [...rows, { amount: "", unit: "", name: "", notes: "" }])
-          }
-          className="mt-3 text-sm text-[var(--accent)] hover:underline"
-        >
-          + Add ingredient
-        </button>
+
+        <div className="mt-3 flex gap-2">
+          <input
+            placeholder="New category name, e.g. Bread, Topping"
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addCategory();
+              }
+            }}
+            className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-1.5 text-sm"
+          />
+          <button
+            type="button"
+            onClick={addCategory}
+            className="rounded-full border border-[var(--border)] px-3 py-1.5 text-sm hover:bg-[var(--bg-muted)]"
+          >
+            + Add category
+          </button>
+        </div>
       </section>
 
       <section>
         <h2 className="mb-3 font-serif text-lg font-semibold">Steps</h2>
         <div className="flex flex-col gap-3">
           {steps.map((step, i) => (
-            <div key={i} className="flex gap-2">
+            <div
+              key={i}
+              data-step-card
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverStep(i);
+              }}
+              onDragLeave={() => setDragOverStep((idx) => (idx === i ? null : idx))}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOverStep(null);
+                const payload = readDragPayload(e);
+                if (payload?.type === "step") reorderStep(payload.index, i);
+              }}
+              className={`flex gap-2 rounded-lg border p-1 transition-opacity ${
+                draggingStep === i
+                  ? "border-[var(--accent)] opacity-40"
+                  : dragOverStep === i
+                    ? "border-[var(--accent)]"
+                    : "border-transparent"
+              }`}
+            >
+              <span
+                draggable
+                onDragStart={(e) => {
+                  setCardDragImage(e, "[data-step-card]");
+                  setDraggingStep(i);
+                  setDragPayload(e, { type: "step", index: i });
+                }}
+                onDragEnd={() => setDraggingStep(null)}
+                className="mt-2 flex shrink-0 cursor-grab items-center rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg-muted)] active:cursor-grabbing"
+                aria-label="Drag to reorder"
+                title="Drag to reorder"
+              >
+                <GripIcon />
+              </span>
               <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-semibold text-[var(--accent)]">
                 {i + 1}
               </span>
@@ -278,10 +540,18 @@ export function RecipeForm({
                   placeholder="Describe this step..."
                   className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm"
                 />
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-3">
                   {step.photo_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={step.photo_url} alt="" className="h-12 w-12 rounded object-cover" />
+                    <EditableImage
+                      src={step.photo_url}
+                      aspect={1}
+                      className="h-12 w-12"
+                      onChange={(newUrl) =>
+                        setSteps((rows) =>
+                          rows.map((r, idx) => (idx === i ? { ...r, photo_url: newUrl } : r))
+                        )
+                      }
+                    />
                   )}
                   <label className="cursor-pointer text-xs text-[var(--accent)] hover:underline">
                     {step.photo_url ? "Replace photo" : "+ Add photo"}
@@ -300,6 +570,21 @@ export function RecipeForm({
                       }}
                     />
                   </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSteps((rows) =>
+                        rows.map((r, idx) => (idx === i ? { ...r, is_pinned: !r.is_pinned } : r))
+                      )
+                    }
+                    className={`rounded-full border px-2 py-1 text-xs ${
+                      step.is_pinned
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                        : "border-[var(--border)] text-[var(--text-muted)]"
+                    }`}
+                  >
+                    {step.is_pinned ? "📌 Always shown" : "Always show this step ▾"}
+                  </button>
                 </div>
               </div>
               <button
@@ -314,7 +599,9 @@ export function RecipeForm({
         </div>
         <button
           type="button"
-          onClick={() => setSteps((rows) => [...rows, { body: "", photo_url: "" }])}
+          onClick={() =>
+            setSteps((rows) => [...rows, { body: "", photo_url: "", is_pinned: false }])
+          }
           className="mt-3 text-sm text-[var(--accent)] hover:underline"
         >
           + Add step

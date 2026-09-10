@@ -4,9 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { titleCase } from "@/lib/text";
+import { parseFraction } from "@/lib/fractions";
 
-type IngredientInput = { amount: string; unit: string; name: string; notes: string };
-type StepInput = { body: string; photo_url: string };
+type IngredientInput = { amount: string; unit: string; name: string; category: string; note: string };
+type StepInput = { body: string; photo_url: string; is_pinned: boolean };
 
 function parseIngredients(raw: string): IngredientInput[] {
   return JSON.parse(raw);
@@ -26,8 +27,8 @@ export async function createRecipe(formData: FormData) {
   const description = String(formData.get("description") || "");
   const servings = Number(formData.get("servings")) || 4;
   const servingUnit = titleCase(String(formData.get("serving_unit") || "Serving").trim()) || "Serving";
-  const prep = formData.get("prep_minutes") ? Number(formData.get("prep_minutes")) : null;
-  const cook = formData.get("cook_minutes") ? Number(formData.get("cook_minutes")) : null;
+  const prep = String(formData.get("prep_minutes") || "").trim() || null;
+  const cook = String(formData.get("cook_minutes") || "").trim() || null;
   const tags = String(formData.get("tags") || "")
     .split(",")
     .map((t) => titleCase(t.trim()))
@@ -99,8 +100,8 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
   const description = String(formData.get("description") || "");
   const servings = Number(formData.get("servings")) || 4;
   const servingUnit = titleCase(String(formData.get("serving_unit") || "Serving").trim()) || "Serving";
-  const prep = formData.get("prep_minutes") ? Number(formData.get("prep_minutes")) : null;
-  const cook = formData.get("cook_minutes") ? Number(formData.get("cook_minutes")) : null;
+  const prep = String(formData.get("prep_minutes") || "").trim() || null;
+  const cook = String(formData.get("cook_minutes") || "").trim() || null;
   const tags = String(formData.get("tags") || "")
     .split(",")
     .map((t) => titleCase(t.trim()))
@@ -158,10 +159,11 @@ async function writeChildren(
       ingredients.map((ing, i) => ({
         recipe_id: recipeId,
         position: i,
-        amount: ing.amount ? Number(ing.amount) : null,
+        amount: ing.amount ? parseFraction(ing.amount) : null,
         unit: ing.unit || null,
         name: titleCase(ing.name),
-        notes: ing.notes ? titleCase(ing.notes) : null,
+        category: ing.category ? titleCase(ing.category) : null,
+        note: ing.note || null,
       }))
     );
   }
@@ -173,6 +175,7 @@ async function writeChildren(
         position: i,
         body: step.body,
         photo_url: step.photo_url || null,
+        is_pinned: step.is_pinned,
       }))
     );
   }

@@ -28,7 +28,7 @@ export function RecipeCard({ recipe, photoUrl }: { recipe: Recipe; photoUrl?: st
           {recipe.tags.slice(0, 3).map((tag) => (
             <span
               key={tag}
-              className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-xs text-[var(--accent)]"
+              className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-serif text-xs text-[var(--accent)]"
             >
               {tag}
             </span>

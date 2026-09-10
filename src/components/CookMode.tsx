@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Ingredient, Step } from "@/types/recipe";
 import { ServingScaler } from "./ServingScaler";
@@ -22,6 +22,9 @@ export function CookMode({
   equipment: string[];
   steps: Step[];
 }) {
+  const splitStorageKey = `cookmode-split-${recipeId}`;
+  const widthStorageKey = `cookmode-width-${recipeId}`;
+
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [ingredientsHeight, setIngredientsHeight] = useState(360);
   const [current, setCurrent] = useState(0);
@@ -29,6 +32,49 @@ export function CookMode({
   const [showServings, setShowServings] = useState(true);
   const dragging = useRef(false);
   const asideRef = useRef<HTMLElement>(null);
+  const ingredientsContentRef = useRef<HTMLDivElement>(null);
+  const equipmentContentRef = useRef<HTMLDivElement>(null);
+  // Once the cook drags a handle, their choice sticks (and persists) instead
+  // of being recalculated from content on every render.
+  const heightManual = useRef(false);
+  const widthManual = useRef(false);
+
+  // Restore a cook's previous manual adjustments for this recipe, if any.
+  useEffect(() => {
+    try {
+      const storedSplit = localStorage.getItem(splitStorageKey);
+      if (storedSplit) {
+        heightManual.current = true;
+        setIngredientsHeight(Number(storedSplit));
+      }
+      const storedWidth = localStorage.getItem(widthStorageKey);
+      if (storedWidth) {
+        widthManual.current = true;
+        setSidebarWidth(Number(storedWidth));
+      }
+    } catch {
+      // localStorage unavailable — fall back to auto-sizing below.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipeId]);
+
+  // Auto-fit the ingredients/equipment split to how much content each
+  // actually has, instead of a fixed 50/50, unless the cook has manually
+  // resized it (in which case that choice is kept).
+  useLayoutEffect(() => {
+    if (heightManual.current) return;
+    if (!asideRef.current || !ingredientsContentRef.current) return;
+    if (!equipmentContentRef.current) return;
+
+    const total = asideRef.current.getBoundingClientRect().height;
+    const ingredientsNatural = ingredientsContentRef.current.scrollHeight;
+    const equipmentNatural = equipmentContentRef.current.scrollHeight;
+    const combined = ingredientsNatural + equipmentNatural;
+    if (combined === 0 || total === 0) return;
+
+    const proportional = (ingredientsNatural / combined) * total;
+    setIngredientsHeight(Math.min(total - 120, Math.max(120, proportional)));
+  }, [ingredients, equipment, showServings]);
 
   const onDrag = useCallback((e: MouseEvent) => {
     if (!dragging.current) return;
@@ -39,6 +85,15 @@ export function CookMode({
     dragging.current = true;
     const stop = () => {
       dragging.current = false;
+      widthManual.current = true;
+      setSidebarWidth((w) => {
+        try {
+          localStorage.setItem(widthStorageKey, String(w));
+        } catch {
+          // ignore
+        }
+        return w;
+      });
       window.removeEventListener("mousemove", onDrag);
       window.removeEventListener("mouseup", stop);
     };
@@ -57,6 +112,15 @@ export function CookMode({
     dragging.current = true;
     const stop = () => {
       dragging.current = false;
+      heightManual.current = true;
+      setIngredientsHeight((h) => {
+        try {
+          localStorage.setItem(splitStorageKey, String(h));
+        } catch {
+          // ignore
+        }
+        return h;
+      });
       window.removeEventListener("mousemove", onDragHeight);
       window.removeEventListener("mouseup", stop);
     };
@@ -68,21 +132,25 @@ export function CookMode({
   // window size setting — extraSteps only adds further out from that floor.
   const start = Math.max(0, current - 1 - Math.floor(extraSteps / 2));
   const end = Math.min(steps.length, current + 2 + Math.ceil(extraSteps / 2));
-  const visibleSteps = steps.slice(start, end);
+  // Pinned steps are informational and always shown, regardless of the
+  // current step — kept out of the windowed list so they aren't duplicated.
+  const pinnedSteps = steps.filter((s) => s.is_pinned);
+  const visibleSteps = steps.slice(start, end).filter((s) => !s.is_pinned);
 
   return (
-    <div className="flex h-[calc(100vh-57px)] w-full overflow-hidden">
+    <div className="flex w-full">
       <aside
         ref={asideRef}
         style={{ width: sidebarWidth }}
-        className="flex shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] text-base [container-type:inline-size]"
+        className="sticky top-[57px] flex h-[calc(100vh-57px)] shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] text-base [container-type:inline-size]"
       >
         <div
           style={equipment.length > 0 ? { height: ingredientsHeight } : undefined}
           className={`flex min-h-0 flex-col overflow-y-auto p-6 ${equipment.length > 0 ? "shrink-0" : "flex-1"}`}
         >
+          <div ref={ingredientsContentRef} className="flex min-h-0 flex-col">
           <div className="mb-3 flex shrink-0 items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            <h2 className="font-serif text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               Ingredients
             </h2>
             <button
@@ -99,6 +167,7 @@ export function CookMode({
             ingredients={ingredients}
             showServings={showServings}
           />
+          </div>
         </div>
 
         {equipment.length > 0 && (
@@ -108,19 +177,21 @@ export function CookMode({
               className="h-1.5 shrink-0 cursor-row-resize border-t border-[var(--border)] bg-[var(--border)] hover:bg-[var(--accent)]"
             />
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
-            <h2 className="mb-3 shrink-0 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            <div ref={equipmentContentRef} className="flex min-h-0 flex-col">
+            <h2 className="mb-3 shrink-0 font-serif text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               Equipment
             </h2>
-            <ul className="[column-gap:1.5rem] [column-width:160px] text-base">
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] items-start gap-x-4 gap-y-1.5 text-base">
               {equipment.map((eq) => (
                 <li
                   key={eq}
-                  className="mb-1.5 min-w-0 break-words break-inside-avoid before:mr-1 before:text-[var(--text-muted)] before:content-['·']"
+                  className="min-w-0 break-words before:mr-1 before:text-[var(--text-muted)] before:content-['·']"
                 >
                   {eq}
                 </li>
               ))}
             </ul>
+            </div>
             </div>
           </>
         )}
@@ -128,10 +199,10 @@ export function CookMode({
 
       <div
         onMouseDown={startDrag}
-        className="w-1.5 shrink-0 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)]"
+        className="sticky top-[57px] h-[calc(100vh-57px)] w-1.5 shrink-0 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)]"
       />
 
-      <section className="flex flex-1 flex-col overflow-y-auto p-8">
+      <section className="flex flex-1 flex-col p-8 pb-24">
         <div className="flex w-full flex-1 flex-col gap-8">
           <div className="flex items-center justify-between">
             <div>
@@ -161,7 +232,32 @@ export function CookMode({
             </label>
           </div>
 
-          <div className="flex flex-1 flex-col gap-4">
+          <div className="flex flex-1 flex-col gap-3">
+            {pinnedSteps.map((step) => {
+              const idx = steps.indexOf(step);
+              return (
+                <div
+                  key={step.id}
+                  onClick={() => setCurrent(idx)}
+                  className="cursor-pointer rounded-[var(--radius)] border border-[var(--accent)] bg-[var(--accent-soft)] p-3 shadow-[var(--shadow)]"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <span className="mt-0.5 shrink-0 text-sm" aria-label="Always shown">
+                      📌
+                    </span>
+                    <p className="text-sm leading-relaxed">{step.body}</p>
+                  </div>
+                  {step.photo_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={step.photo_url}
+                      alt=""
+                      className="mt-3 max-h-28 w-full rounded-lg object-cover"
+                    />
+                  )}
+                </div>
+              );
+            })}
             {visibleSteps.map((step) => {
               const idx = steps.indexOf(step);
               const isCurrent = idx === current;
@@ -171,21 +267,21 @@ export function CookMode({
                   onClick={() => setCurrent(idx)}
                   className={`cursor-pointer rounded-[var(--radius)] border transition-all ${
                     isCurrent
-                      ? "border-[var(--accent)] bg-[var(--accent-soft)] p-8 shadow-[var(--shadow)]"
-                      : "border-[var(--border)] bg-[var(--bg-elevated)] p-4 opacity-60"
+                      ? "border-[var(--accent)] bg-[var(--accent-soft)] p-5 shadow-[var(--shadow)]"
+                      : "border-[var(--border)] bg-[var(--bg-elevated)] p-3 opacity-60"
                   }`}
                 >
-                  <div className={`flex items-start ${isCurrent ? "gap-5" : "gap-3"}`}>
+                  <div className={`flex items-start ${isCurrent ? "gap-4" : "gap-2.5"}`}>
                     <span
                       className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${
                         isCurrent
-                          ? "h-11 w-11 bg-[var(--accent)] text-xl text-white"
-                          : "h-7 w-7 bg-[var(--bg-muted)] text-sm text-[var(--text-muted)]"
+                          ? "h-8 w-8 bg-[var(--accent)] text-base text-white"
+                          : "h-6 w-6 bg-[var(--bg-muted)] text-xs text-[var(--text-muted)]"
                       }`}
                     >
                       {idx + 1}
                     </span>
-                    <p className={isCurrent ? "text-2xl leading-relaxed" : "text-base leading-relaxed"}>
+                    <p className={isCurrent ? "text-lg leading-relaxed" : "text-sm leading-relaxed"}>
                       {step.body}
                     </p>
                   </div>
@@ -194,8 +290,8 @@ export function CookMode({
                     <img
                       src={step.photo_url}
                       alt=""
-                      className={`mt-4 w-full rounded-lg object-cover ${
-                        isCurrent ? "max-h-96" : "max-h-40"
+                      className={`mt-3 w-full rounded-lg object-cover ${
+                        isCurrent ? "max-h-64" : "max-h-28"
                       }`}
                     />
                   )}
@@ -204,24 +300,25 @@ export function CookMode({
             })}
           </div>
 
-          <div className="flex justify-between pt-4">
-            <button
-              onClick={() => setCurrent((c) => Math.max(0, c - 1))}
-              disabled={current === 0}
-              className="rounded-full border border-[var(--border)] px-5 py-2 text-sm font-medium disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setCurrent((c) => Math.min(steps.length - 1, c + 1))}
-              disabled={current === steps.length - 1}
-              className="rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--accent-hover)] disabled:opacity-40"
-            >
-              Next step
-            </button>
-          </div>
         </div>
       </section>
+
+      <div className="fixed bottom-6 right-6 z-40 flex gap-2">
+        <button
+          onClick={() => setCurrent((c) => Math.max(0, c - 1))}
+          disabled={current === 0}
+          className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-5 py-2 text-sm font-medium shadow-[var(--shadow)] disabled:opacity-40"
+        >
+          Previous
+        </button>
+        <button
+          onClick={() => setCurrent((c) => Math.min(steps.length - 1, c + 1))}
+          disabled={current === steps.length - 1}
+          className="rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-medium text-white shadow-[var(--shadow)] hover:bg-[var(--accent-hover)] disabled:opacity-40"
+        >
+          Next step
+        </button>
+      </div>
     </div>
   );
 }

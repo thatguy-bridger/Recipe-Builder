@@ -34,6 +34,10 @@ const themeInitScript = `
     if (t === 'light' || t === 'dark') {
       document.documentElement.setAttribute('data-theme', t);
     }
+    var s = localStorage.getItem('contentScale');
+    if (s) {
+      document.documentElement.style.fontSize = s + '%';
+    }
   } catch (e) {}
 })();
 `;

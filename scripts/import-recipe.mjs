@@ -16,19 +16,20 @@
  *   "title": "Grandma's Chili",
  *   "description": "...",
  *   "servings": 6,
- *   "prep_minutes": 15,
- *   "cook_minutes": 90,
+ *   "prep_minutes": "15",
+ *   "cook_minutes": "10-12",
  *   "tags": ["Soup", "Dinner"],
  *   "equipment": ["Dutch oven"],
  *   "video_url": null,
  *   "photos": ["images/chili-1.jpg"],
  *   "ingredients": [
- *     { "amount": 1, "unit": "lb", "name": "ground beef", "notes": "" }
+ *     { "amount": "1", "unit": "lb", "name": "ground beef", "category": "", "note": "" }
  *   ],
  *   "steps": [
- *     { "body": "Brown the beef.", "photo": "images/step1.jpg" }
+ *     { "body": "Brown the beef.", "photo": "images/step1.jpg", "is_pinned": false }
  *   ]
  * }
+ * Amounts are fraction strings ("1/2", "1 1/2") or whole numbers — never decimals.
  */
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "node:fs";
@@ -65,6 +66,17 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 function isUrl(s) {
   return /^https?:\/\//.test(s || "");
+}
+
+function parseFraction(input) {
+  if (input == null || input === "") return null;
+  const s = String(input).trim();
+  const mixed = s.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+  if (mixed) return Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
+  const frac = s.match(/^(\d+)\/(\d+)$/);
+  if (frac) return Number(frac[1]) / Number(frac[2]);
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
 }
 
 function titleCase(input) {
@@ -125,7 +137,7 @@ async function main() {
   const stepsWithPhotos = [];
   for (const step of recipe.steps || []) {
     const photoUrl = step.photo ? await uploadLocalPhoto(step.photo) : null;
-    stepsWithPhotos.push({ body: step.body, photo_url: photoUrl });
+    stepsWithPhotos.push({ body: step.body, photo_url: photoUrl, is_pinned: Boolean(step.is_pinned) });
   }
 
   const { data: inserted, error: insertError } = await supabase
@@ -135,8 +147,9 @@ async function main() {
       title: titleCase(recipe.title),
       description: recipe.description || null,
       servings: recipe.servings ?? 4,
-      prep_minutes: recipe.prep_minutes ?? null,
-      cook_minutes: recipe.cook_minutes ?? null,
+      serving_unit: recipe.serving_unit || "Serving",
+      prep_minutes: recipe.prep_minutes != null ? String(recipe.prep_minutes) : null,
+      cook_minutes: recipe.cook_minutes != null ? String(recipe.cook_minutes) : null,
       tags: (recipe.tags || []).map(titleCase),
       equipment: (recipe.equipment || []).map(titleCase),
       video_url: recipe.video_url || null,
@@ -153,10 +166,11 @@ async function main() {
       recipe.ingredients.map((ing, i) => ({
         recipe_id: recipeId,
         position: i,
-        amount: ing.amount ?? null,
+        amount: parseFraction(ing.amount),
         unit: ing.unit || null,
         name: titleCase(ing.name),
-        notes: ing.notes ? titleCase(ing.notes) : null,
+        category: ing.category ? titleCase(ing.category) : null,
+        note: ing.note || null,
       }))
     );
     if (error) throw error;
@@ -169,6 +183,7 @@ async function main() {
         position: i,
         body: s.body,
         photo_url: s.photo_url,
+        is_pinned: s.is_pinned,
       }))
     );
     if (error) throw error;

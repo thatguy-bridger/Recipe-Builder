@@ -6,7 +6,9 @@ export default async function HomePage() {
 
   const { data: recipes } = await supabase
     .from("recipes")
-    .select("*, recipe_photos(url, position), recipe_ingredients(name, notes), recipe_steps(body)")
+    .select(
+      "*, recipe_photos(url, position), recipe_ingredients(name, category, note), recipe_steps(body)"
+    )
     .eq("is_published", true)
     .order("created_at", { ascending: false });
 

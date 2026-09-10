@@ -2,11 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Ingredient } from "@/types/recipe";
-
-function formatAmount(n: number) {
-  const rounded = Math.round(n * 100) / 100;
-  return rounded % 1 === 0 ? String(rounded) : rounded.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-}
+import { formatFraction } from "@/lib/fractions";
 
 function pluralize(unit: string, count: number) {
   if (!unit) return unit;
@@ -37,12 +33,33 @@ export function ServingScaler({
     [ingredients, factor]
   );
 
+  // Group by category. Categories appear in the order they're first seen;
+  // uncategorized items are listed last with no heading at all.
+  const groups = useMemo(() => {
+    const byCategory = new Map<string, typeof scaled>();
+    const uncategorized: typeof scaled = [];
+    for (const ing of scaled) {
+      const category = ing.category?.trim();
+      if (!category) {
+        uncategorized.push(ing);
+        continue;
+      }
+      if (!byCategory.has(category)) byCategory.set(category, []);
+      byCategory.get(category)!.push(ing);
+    }
+    const result: { category: string | null; items: typeof scaled }[] = Array.from(
+      byCategory.entries()
+    ).map(([category, items]) => ({ category, items }));
+    if (uncategorized.length > 0) result.push({ category: null, items: uncategorized });
+    return result;
+  }, [scaled]);
+
   return (
     <div className="flex flex-col gap-4">
       {showServings && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
-            <span className="text-base font-medium">Servings</span>
+            <span className="font-serif text-base font-medium">Servings</span>
             <input
               type="range"
               min={1}
@@ -64,27 +81,38 @@ export function ServingScaler({
           </p>
         </div>
       )}
-      <ul className="[column-gap:1.5rem] [column-width:200px]">
-        {scaled.map((ing) => (
-          <li
-            key={ing.id}
-            className="mb-3 flex min-w-0 flex-wrap items-baseline gap-2 text-base break-inside-avoid before:mr-1 before:text-[var(--text-muted)] before:content-['·']"
-          >
-            <span className="shrink-0 font-medium text-[var(--accent)]">
-              {ing.amount != null ? formatAmount(ing.amount) : ""} {ing.unit ?? ""}
-            </span>
-            <span className="min-w-0 break-words">{ing.name}</span>
-            {ing.notes && (
-              <span
-                className="rounded-full bg-[var(--accent-soft)] px-[1.5cqw] py-[0.4cqw] font-semibold uppercase tracking-wide text-[var(--accent)] shadow-[0_0_8px_var(--accent)]"
-                style={{ fontSize: "clamp(0.5rem, 3.2cqw, 0.75rem)" }}
+      <div className="flex flex-col gap-4">
+        {groups.map(({ category, items }) => (
+          <div key={category ?? "__uncategorized"}>
+            {category && (
+              <h3
+                className="mb-2 border-b border-[var(--border)] pb-1 font-serif font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]"
+                style={{ fontSize: "clamp(0.75rem, 3.6cqw, 0.95rem)" }}
               >
-                {ing.notes}
-              </span>
+                {category}
+              </h3>
             )}
-          </li>
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] items-start gap-x-6 gap-y-2">
+              {items.map((ing) => (
+                <li
+                  key={ing.id}
+                  className="flex min-w-0 items-baseline gap-2 text-base before:mr-1 before:shrink-0 before:text-[var(--text-muted)] before:content-['·']"
+                >
+                  <span className="shrink-0 font-medium text-[var(--accent)]">
+                    {ing.amount != null ? formatFraction(ing.amount) : ""} {ing.unit ?? ""}
+                  </span>
+                  <span className="min-w-0 break-words">
+                    {ing.name}
+                    {ing.note && (
+                      <span className="block text-xs text-[var(--text-muted)]">{ing.note}</span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
