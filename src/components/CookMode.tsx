@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -12,6 +13,11 @@ import Link from "next/link";
 import type { Ingredient, Step } from "@/types/recipe";
 import { ServingScaler } from "./ServingScaler";
 import { StepPhotos } from "./StepPhotos";
+import { useCookTimer } from "./CookTimerProvider";
+import { formatDuration, parseMinutesText } from "@/lib/duration";
+import { findMentionedIngredients, splitByTerms } from "@/lib/ingredientMatch";
+
+type SubTimer = { stepId: string; total: number; remaining: number; running: boolean };
 
 export function CookMode({
   recipeId,
@@ -143,6 +149,52 @@ export function CookMode({
   const pinnedSteps = steps.filter((s) => s.is_pinned);
   const visibleSteps = steps.slice(start, end).filter((s) => !s.is_pinned);
 
+  // The overall cook-session timer lives in a global provider (so it can
+  // show as a warning badge in the top bar even after leaving this page).
+  // Entering Cook Mode claims/starts it for this recipe.
+  const { timer: mainTimer, startFor, pause: pauseMain, resume: resumeMain, reset: resetMain } = useCookTimer();
+  useEffect(() => {
+    startFor(recipeId, title);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipeId]);
+
+  // A separate, page-local countdown for whichever step is current, if that
+  // step has an optional timer set. Restarts fresh every time the current
+  // step changes (however you got there — Next, Previous, or a card click).
+  const [subTimer, setSubTimer] = useState<SubTimer | null>(null);
+  useEffect(() => {
+    const step = steps[current];
+    const minutes = step?.timer_minutes ? parseMinutesText(step.timer_minutes) : null;
+    if (!step || minutes == null) {
+      setSubTimer(null);
+      return;
+    }
+    const total = Math.round(minutes * 60);
+    setSubTimer({ stepId: step.id, total, remaining: total, running: true });
+  }, [current, steps]);
+
+  useEffect(() => {
+    if (!subTimer?.running) return;
+    const interval = setInterval(() => {
+      setSubTimer((t) => (t && t.running && t.remaining > 0 ? { ...t, remaining: t.remaining - 1 } : t));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [subTimer?.running, subTimer?.stepId]);
+
+  // Contextual ingredient highlighting: which ingredients does the current
+  // step's text mention, so they can be called out both in the step itself
+  // and (bigger) in the sidebar list.
+  const currentStep = steps[current];
+  const mentionedIngredients = useMemo(
+    () => (currentStep ? findMentionedIngredients(currentStep.body, ingredients) : []),
+    [currentStep, ingredients]
+  );
+  const highlightedIds = useMemo(
+    () => new Set(mentionedIngredients.map((i) => i.id)),
+    [mentionedIngredients]
+  );
+  const mentionedNames = useMemo(() => mentionedIngredients.map((i) => i.name), [mentionedIngredients]);
+
   return (
     <div className="flex w-full">
       <aside
@@ -172,6 +224,7 @@ export function CookMode({
             servingUnit={servingUnit}
             ingredients={ingredients}
             showServings={showServings}
+            highlightedIds={highlightedIds}
           />
           </div>
         </div>
@@ -225,9 +278,30 @@ export function CookMode({
                 &larr; Exit cook mode
               </Link>
               <h1 className="font-serif text-xl font-semibold">{title}</h1>
-              <span className="text-sm text-[var(--text-muted)]">
-                Step {current + 1} of {steps.length}
-              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-sm text-[var(--text-muted)]">
+                  Step {current + 1} of {steps.length}
+                </span>
+                <div className="flex items-center gap-1.5 text-sm">
+                  <span className="tabular-nums font-semibold">
+                    {formatDuration(mainTimer.elapsedSeconds)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={mainTimer.running ? pauseMain : resumeMain}
+                    className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
+                  >
+                    {mainTimer.running ? "Pause" : "Resume"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetMain}
+                    className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
             </div>
             <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
               Show
@@ -297,7 +371,20 @@ export function CookMode({
                         {idx + 1}
                       </span>
                       <p className={isCurrent ? "text-lg leading-relaxed" : "text-sm leading-relaxed"}>
-                        {step.body}
+                        {isCurrent
+                          ? splitByTerms(step.body, mentionedNames).map((seg, si) =>
+                              seg.matched ? (
+                                <mark
+                                  key={si}
+                                  className="rounded bg-[var(--accent-soft)] px-0.5 text-[var(--accent)]"
+                                >
+                                  {seg.text}
+                                </mark>
+                              ) : (
+                                <span key={si}>{seg.text}</span>
+                              )
+                            )
+                          : step.body}
                       </p>
                     </div>
                     <StepPhotos
@@ -305,6 +392,33 @@ export function CookMode({
                       singleMaxHeightClass={isCurrent ? "max-h-[420px]" : "max-h-28"}
                       multiMaxHeightClass={isCurrent ? "max-h-52" : "max-h-20"}
                     />
+                    {isCurrent && subTimer && (
+                      <div className="mt-3 flex items-center gap-2 text-sm" onClick={(e) => e.stopPropagation()}>
+                        <span
+                          className={`tabular-nums font-semibold ${
+                            subTimer.remaining === 0 ? "text-[var(--danger)]" : "text-[var(--accent)]"
+                          }`}
+                        >
+                          {subTimer.remaining === 0 ? "Timer done" : formatDuration(subTimer.remaining)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSubTimer((t) => (t ? { ...t, running: !t.running } : t))}
+                          className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
+                        >
+                          {subTimer.running ? "Pause" : "Resume"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSubTimer((t) => (t ? { ...t, remaining: t.total, running: true } : t))
+                          }
+                          className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findMentionedIngredients } from "./ingredientMatch";
+import { findMentionedIngredients, splitByTerms } from "./ingredientMatch";
 
 function ing(id: string, name: string) {
   return { id, name };
@@ -35,5 +35,28 @@ describe("findMentionedIngredients", () => {
   it("ignores ingredients with a blank name", () => {
     const ingredients = [ing("1", "  ")];
     expect(findMentionedIngredients("Some step text.", ingredients)).toEqual([]);
+  });
+});
+
+describe("splitByTerms", () => {
+  it("returns the whole text unmatched when there are no terms", () => {
+    expect(splitByTerms("Mix the ricotta.", [])).toEqual([{ text: "Mix the ricotta.", matched: false }]);
+  });
+
+  it("tags the matching segment", () => {
+    const result = splitByTerms("Mix the ricotta well.", ["ricotta"]);
+    expect(result.map((s) => s.matched)).toEqual([false, true, false]);
+    expect(result.find((s) => s.matched)?.text.toLowerCase()).toBe("ricotta");
+  });
+
+  it("matches case-insensitively while preserving original casing", () => {
+    const result = splitByTerms("Add the Ricotta now.", ["ricotta"]);
+    expect(result.find((s) => s.matched)?.text).toBe("Ricotta");
+  });
+
+  it("prefers the longer term when one term is a substring of another", () => {
+    const result = splitByTerms("Add all-purpose flour.", ["Flour", "All-Purpose Flour"]);
+    const matches = result.filter((s) => s.matched).map((s) => s.text);
+    expect(matches).toEqual(["all-purpose flour"]);
   });
 });

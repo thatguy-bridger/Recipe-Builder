@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { CookTimerProvider } from "@/components/CookTimerProvider";
 import { NavBar } from "@/components/NavBar";
 
 const geistSans = Geist({
@@ -60,8 +61,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
-          <NavBar />
-          <main className="flex-1">{children}</main>
+          <CookTimerProvider>
+            <NavBar />
+            <main className="flex-1">{children}</main>
+          </CookTimerProvider>
         </ThemeProvider>
       </body>
     </html>
