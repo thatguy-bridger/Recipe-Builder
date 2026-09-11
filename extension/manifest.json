@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Recipe Boxed Exporter",
+  "version": "1.0.0",
+  "description": "Detects a recipe on the current page and exports it as JSON you can import into Recipe Boxed.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Export recipe as JSON",
+    "default_icon": {
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["activeTab", "scripting", "downloads"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "recipe-boxed-exporter@recipeboxed.local",
+      "strict_min_version": "109.0"
+    }
+  }
+}

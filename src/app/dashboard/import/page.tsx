@@ -18,9 +18,21 @@ export default async function ImportRecipePage({
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
       <h1 className="mb-2 font-serif text-3xl font-semibold">Import a recipe</h1>
-      <p className="mb-6 text-[var(--text-muted)]">
+      <p className="mb-2 text-[var(--text-muted)]">
         Paste JSON exported from Recipe Boxed (or matching the same shape). The recipe is created
         as a draft under your account, so you can review it before publishing.
+      </p>
+      <p className="mb-6 text-sm text-[var(--text-muted)]">
+        Grabbing a recipe from another site? The{" "}
+        <a
+          href="https://github.com/thatguy-bridger/Recipe-Builder/tree/main/extension"
+          target="_blank"
+          rel="noreferrer"
+          className="text-[var(--accent)] underline"
+        >
+          Recipe Boxed Exporter browser extension
+        </a>{" "}
+        detects a recipe on the page and produces JSON in this exact shape for you.
       </p>
 
       {error && (

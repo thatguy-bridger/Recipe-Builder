@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Recipe Boxed Exporter</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        width: 340px;
+        margin: 0;
+        padding: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 13px;
+        background: #fff;
+        color: #1a1a1a;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #1a1512;
+          color: #f2ece4;
+        }
+        textarea, #status.error {
+          background: #2a231d !important;
+          border-color: #4a3b2e !important;
+          color: #f2ece4 !important;
+        }
+      }
+      h1 {
+        font-size: 15px;
+        margin: 0 0 4px;
+      }
+      p.sub {
+        margin: 0 0 14px;
+        color: #8a7d6e;
+      }
+      button {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: none;
+        background: #ed894a;
+        color: white;
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      button.secondary {
+        background: transparent;
+        border: 1px solid #d8cfc2;
+        color: inherit;
+        margin-top: 8px;
+      }
+      #status {
+        margin-top: 12px;
+        font-size: 12px;
+        color: #8a7d6e;
+      }
+      #status.error {
+        color: #c0392b;
+        background: #fdf0ee;
+        border: 1px solid #f2c9c2;
+        border-radius: 8px;
+        padding: 8px;
+      }
+      #result {
+        display: none;
+        margin-top: 12px;
+      }
+      textarea {
+        width: 100%;
+        height: 160px;
+        box-sizing: border-box;
+        font-family: ui-monospace, monospace;
+        font-size: 11px;
+        border-radius: 8px;
+        border: 1px solid #d8cfc2;
+        padding: 8px;
+        resize: vertical;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Recipe Boxed Exporter</h1>
+    <p class="sub">Detects a recipe on this page and exports it as JSON to import into Recipe Boxed.</p>
+    <button id="detect">Detect recipe on this page</button>
+    <div id="status"></div>
+    <div id="result">
+      <textarea id="json" readonly></textarea>
+      <button id="copy" class="secondary">Copy JSON</button>
+      <button id="download" class="secondary">Download JSON</button>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
