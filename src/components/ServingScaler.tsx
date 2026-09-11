@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Ingredient } from "@/types/recipe";
-import { formatIngredientLine } from "@/lib/ingredients";
+import { formatIngredientQuantity } from "@/lib/ingredients";
 
 function pluralize(unit: string, count: number) {
   if (!unit) return unit;
@@ -96,9 +96,19 @@ export function ServingScaler({
               {items.map((ing) => (
                 <li
                   key={ing.id}
-                  className="flex min-w-0 break-words text-base before:mr-1 before:shrink-0 before:text-[var(--text-muted)] before:content-['·']"
+                  className="flex min-w-0 items-baseline gap-2 text-base before:mr-1 before:shrink-0 before:text-[var(--text-muted)] before:content-['·']"
                 >
-                  {formatIngredientLine(ing)}
+                  <span className="shrink-0 font-medium text-[var(--accent)]">
+                    {formatIngredientQuantity(ing)}
+                  </span>
+                  <span className="min-w-0 break-words">
+                    {ing.name}
+                    {ing.note && (
+                      <span className="block break-words text-xs text-[var(--text-muted)]">
+                        {ing.note}
+                      </span>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>

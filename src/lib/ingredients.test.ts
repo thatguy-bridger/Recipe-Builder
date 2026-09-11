@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatIngredientLine } from "./ingredients";
+import { formatIngredientLine, formatIngredientQuantity } from "./ingredients";
 
 function ing(overrides: Partial<Parameters<typeof formatIngredientLine>[0]>) {
   return {
@@ -10,6 +10,28 @@ function ing(overrides: Partial<Parameters<typeof formatIngredientLine>[0]>) {
     ...overrides,
   };
 }
+
+describe("formatIngredientQuantity", () => {
+  it("combines amount and unit with a single space", () => {
+    expect(formatIngredientQuantity({ amount: 1.5, unit: "cup" })).toBe("1 1/2 cup");
+  });
+
+  it("returns just the amount with no trailing space when unit is missing", () => {
+    expect(formatIngredientQuantity({ amount: 2, unit: null })).toBe("2");
+  });
+
+  it("returns just the unit with no leading space when amount is missing", () => {
+    expect(formatIngredientQuantity({ amount: null, unit: "pinch" })).toBe("pinch");
+  });
+
+  it("returns an empty string when both are missing", () => {
+    expect(formatIngredientQuantity({ amount: null, unit: null })).toBe("");
+  });
+
+  it("trims a blank unit rather than leaving stray whitespace", () => {
+    expect(formatIngredientQuantity({ amount: 2, unit: "  " })).toBe("2");
+  });
+});
 
 describe("formatIngredientLine", () => {
   it("combines amount, unit, and name into one line", () => {
