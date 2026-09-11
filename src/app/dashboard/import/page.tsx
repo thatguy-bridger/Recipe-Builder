@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { importRecipeJson } from "@/app/actions/recipes";
 import { SubmitButton } from "@/components/SubmitButton";
+import { ImportPrefill } from "@/components/ImportPrefill";
 
 export default async function ImportRecipePage({
   searchParams,
@@ -23,16 +24,20 @@ export default async function ImportRecipePage({
         as a draft under your account, so you can review it before publishing.
       </p>
       <p className="mb-6 text-sm text-[var(--text-muted)]">
-        Grabbing a recipe from another site? The{" "}
+        Grabbing a recipe from another site? Try the{" "}
+        <a href="/bookmarklet" className="text-[var(--accent)] underline">
+          one-click bookmarklet
+        </a>{" "}
+        — it fills this page in for you automatically. Or use the{" "}
         <a
           href="https://github.com/thatguy-bridger/Recipe-Builder/tree/main/extension"
           target="_blank"
           rel="noreferrer"
           className="text-[var(--accent)] underline"
         >
-          Recipe Boxed Exporter browser extension
+          browser extension
         </a>{" "}
-        detects a recipe on the page and produces JSON in this exact shape for you.
+        to copy/download the JSON yourself.
       </p>
 
       {error && (
@@ -40,6 +45,8 @@ export default async function ImportRecipePage({
           {error}
         </p>
       )}
+
+      <ImportPrefill />
 
       <form action={importRecipeJson} className="flex flex-col gap-4">
         <textarea

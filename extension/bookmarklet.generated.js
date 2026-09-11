@@ -1,13 +1,3 @@
-// Finds a schema.org Recipe (JSON-LD first, microdata as a fallback) on
-// the current page and reshapes it into the same JSON the Recipe Boxed
-// app's "Import JSON" page accepts — see src/app/actions/recipes.ts
-// (importRecipeJson) for the authoritative shape.
-//
-// This file is the single source of truth for extraction: the extension
-// popup injects it as-is (chrome.scripting.executeScript picks up the
-// trailing recipeBoxedExtract() call as the injection result), and
-// extension/build-bookmarklet.mjs wraps this same function body into the
-// bookmarklet. Keep it self-contained (no imports) for both to work.
 
 function recipeBoxedExtract() {
   const UNIT_WORDS = [
@@ -388,4 +378,13 @@ function recipeBoxedExtract() {
   return { found: true, recipe: imported };
 }
 
-recipeBoxedExtract();
+(function(){
+  var result = recipeBoxedExtract();
+  if (!result.found) {
+    alert("Recipe Boxed: couldn't find a recipe on this page.");
+    return;
+  }
+  var json = JSON.stringify(result.recipe);
+  var encoded = btoa(unescape(encodeURIComponent(json)));
+  window.open("https://recipeboxed.com" + "/dashboard/import#data=" + encoded, "_blank");
+})();
