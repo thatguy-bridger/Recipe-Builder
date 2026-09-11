@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Recipe } from "@/types/recipe";
 import { buildIsolatedThemeStyle } from "@/lib/designLanguage";
+import { FavoriteButton } from "./FavoriteButton";
 
 type OwnerTheme = {
   theme_accent: string | null;
@@ -14,11 +15,13 @@ export function RecipeCard({
   photoUrl,
   canEdit = false,
   ownerTheme,
+  isFavorite,
 }: {
   recipe: Recipe;
   photoUrl?: string;
   canEdit?: boolean;
   ownerTheme?: OwnerTheme | null;
+  isFavorite?: boolean;
 }) {
   return (
     <div
@@ -67,6 +70,7 @@ export function RecipeCard({
       </div>
 
       <div className="pointer-events-none absolute right-2 top-2 z-10 flex gap-1.5">
+        {isFavorite != null && <FavoriteButton recipeId={recipe.id} initialFavorite={isFavorite} />}
         <Link
           href={`/recipes/${recipe.id}/cook`}
           aria-label="Cook mode"

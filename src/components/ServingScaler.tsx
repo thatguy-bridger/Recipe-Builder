@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Ingredient } from "@/types/recipe";
 import { formatIngredientQuantity } from "@/lib/ingredients";
+import { convertQuantity, isConvertibleUnit } from "@/lib/unitConversion";
 
 function pluralize(unit: string, count: number) {
   if (!unit) return unit;
@@ -32,14 +33,21 @@ export function ServingScaler({
 }) {
   const [servings, setServings] = useState(baseServings || 1);
   const factor = servings / (baseServings || 1);
+  const [unitSystem, setUnitSystem] = useState<"us" | "metric">("us");
+  const hasConvertibleUnits = useMemo(
+    () => ingredients.some((ing) => isConvertibleUnit(ing.unit)),
+    [ingredients]
+  );
 
   const scaled = useMemo(
     () =>
-      ingredients.map((ing) => ({
-        ...ing,
-        amount: ing.amount != null ? ing.amount * factor : null,
-      })),
-    [ingredients, factor]
+      ingredients.map((ing) => {
+        const amount = ing.amount != null ? ing.amount * factor : null;
+        if (amount == null) return { ...ing, amount };
+        const converted = convertQuantity(amount, ing.unit, unitSystem);
+        return { ...ing, amount: converted.amount, unit: converted.unit };
+      }),
+    [ingredients, factor, unitSystem]
   );
 
   // Group by category. Categories appear in the order they're first seen;
@@ -65,6 +73,27 @@ export function ServingScaler({
 
   return (
     <div className="flex flex-col gap-4">
+      {hasConvertibleUnits && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-[var(--text-muted)]">Units</span>
+          <div className="flex overflow-hidden rounded-full border border-[var(--border)]">
+            {(["us", "metric"] as const).map((sys) => (
+              <button
+                key={sys}
+                type="button"
+                onClick={() => setUnitSystem(sys)}
+                className={`px-3 py-1 font-serif text-xs uppercase tracking-wide ${
+                  unitSystem === sys
+                    ? "bg-[var(--accent)] text-white"
+                    : "bg-transparent text-[var(--text-muted)]"
+                }`}
+              >
+                {sys === "us" ? "US" : "Metric"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {showServings && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">

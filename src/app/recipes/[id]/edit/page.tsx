@@ -10,8 +10,21 @@ import {
   duplicateRecipe,
   restoreVersion,
   inviteCollaborator,
+  removeCollaborator,
 } from "@/app/actions/recipes";
+import { ShareLinkControl } from "@/components/ShareLinkControl";
 import type { RecipeWithDetails } from "@/types/recipe";
+
+type ProfileRef = { display_name: string | null } | null;
+
+// Supabase's untyped client returns a joined to-one relation as either a
+// single object or (depending on how it infers the FK) a one-element array
+// — normalize both shapes here instead of casting through `unknown` at each
+// call site.
+function oneProfile(p: unknown): ProfileRef {
+  if (Array.isArray(p)) return (p[0] as ProfileRef) ?? null;
+  return (p as ProfileRef) ?? null;
+}
 
 export default async function EditRecipePage({
   params,
@@ -33,7 +46,7 @@ export default async function EditRecipePage({
     .from("recipes")
     .select("*, recipe_ingredients(*), recipe_steps(*), recipe_photos(*)")
     .eq("id", id)
-    .single<RecipeWithDetails>();
+    .single<RecipeWithDetails & { share_token: string | null }>();
 
   if (!recipe) notFound();
 
@@ -44,7 +57,7 @@ export default async function EditRecipePage({
 
   const { data: collaborators } = await supabase
     .from("recipe_collaborators")
-    .select("user_id, profiles(display_name, email)")
+    .select("user_id, permission, profiles(display_name, email)")
     .eq("recipe_id", id);
 
   const { data: versions } = await supabase
@@ -72,6 +85,12 @@ export default async function EditRecipePage({
               Duplicate
             </SubmitButton>
           </form>
+          <a
+            href={`/api/recipes/${id}/export`}
+            className="rounded-full border border-[var(--border)] px-4 py-1.5 text-sm hover:bg-[var(--bg-muted)]"
+          >
+            Export JSON
+          </a>
           {isOwner && <DeleteRecipeButton action={boundDelete} />}
         </div>
       </div>
@@ -94,22 +113,42 @@ export default async function EditRecipePage({
               {error}
             </p>
           )}
-          <ul className="mb-4 flex flex-col gap-1 text-sm">
+          <ul className="mb-4 flex flex-col gap-2 text-sm">
             {(collaborators ?? []).map((c) => (
-              <li key={c.user_id}>
-                {(c.profiles as unknown as { display_name: string | null })?.display_name ??
-                  "Unknown"}
+              <li key={c.user_id} className="flex items-center justify-between gap-3">
+                <span>
+                  {oneProfile(c.profiles)?.display_name ?? "Unknown"}{" "}
+                  <span className="text-xs text-[var(--text-muted)]">
+                    ({c.permission === "edit" ? "editor" : "viewer"})
+                  </span>
+                </span>
+                <form action={removeCollaborator.bind(null, id, c.user_id)}>
+                  <button
+                    type="submit"
+                    className="text-xs text-[var(--text-muted)] hover:text-[var(--danger)]"
+                  >
+                    Remove
+                  </button>
+                </form>
               </li>
             ))}
           </ul>
-          <form action={boundInvite} className="flex gap-2">
+          <form action={boundInvite} className="flex flex-wrap gap-2">
             <input
               name="email"
               type="email"
               placeholder="their@email.com"
               required
-              className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 outline-none focus:border-[var(--accent)]"
+              className="min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 outline-none focus:border-[var(--accent)]"
             />
+            <select
+              name="permission"
+              defaultValue="edit"
+              className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            >
+              <option value="edit">Editor</option>
+              <option value="view">Viewer</option>
+            </select>
             <SubmitButton
               pendingLabel="Inviting…"
               className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--accent-hover)]"
@@ -117,6 +156,18 @@ export default async function EditRecipePage({
               Invite
             </SubmitButton>
           </form>
+
+          <div className="mt-8">
+            <h2 className="mb-3 font-serif text-lg font-semibold">Share link</h2>
+            <p className="mb-3 text-sm text-[var(--text-muted)]">
+              Anyone with this link can view the recipe (read-only), even if it isn&apos;t
+              published.
+            </p>
+            <ShareLinkControl
+              recipeId={id}
+              initialToken={recipe.share_token}
+            />
+          </div>
         </section>
       )}
 
@@ -126,9 +177,7 @@ export default async function EditRecipePage({
           <ul className="flex flex-col gap-2 text-sm text-[var(--text-muted)]">
             {versions.map((v) => {
               const label = new Date(v.created_at).toLocaleString();
-              const editor =
-                (v.profiles as unknown as { display_name: string | null })?.display_name ??
-                "Unknown";
+              const editor = oneProfile(v.profiles)?.display_name ?? "Unknown";
               return (
                 <li key={v.id} className="flex items-center justify-between gap-3">
                   <span>

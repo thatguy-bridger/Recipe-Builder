@@ -5,15 +5,24 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { titleCase } from "@/lib/text";
 import { parseFraction } from "@/lib/fractions";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 type IngredientInput = { amount: string; unit: string; name: string; category: string; note: string };
 type StepInput = { body: string; photo_urls: string[]; is_pinned: boolean; timer_minutes: string };
 
 function parseIngredients(raw: string): IngredientInput[] {
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
 }
 function parseSteps(raw: string): StepInput[] {
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
 }
 
 export async function createRecipe(formData: FormData) {
@@ -83,6 +92,9 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { data: canEdit } = await supabase.rpc("can_edit_recipe", { rid: recipeId });
+  if (!canEdit) redirect(`/recipes/${recipeId}?error=${encodeURIComponent("You don't have permission to edit this recipe")}`);
+
   // snapshot current state before overwriting
   const { data: existing } = await supabase
     .from("recipes")
@@ -122,6 +134,7 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
   // Everything below is independent of everything else (different tables, or
   // uses only the pre-fetched `existing` snapshot), so run it all at once
   // instead of one round trip at a time.
+  let childErrors: string[] = [];
   await Promise.all([
     existing
       ? supabase.from("recipe_versions").insert({
@@ -155,12 +168,19 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
         supabase.from("recipe_steps").delete().eq("recipe_id", recipeId),
         supabase.from("recipe_photos").delete().eq("recipe_id", recipeId),
       ]);
-      await writeChildren(recipeId, ingredients, steps, photoUrls);
+      childErrors = await writeChildren(recipeId, ingredients, steps, photoUrls);
     })(),
   ]);
 
   revalidatePath("/dashboard");
   revalidatePath(`/recipes/${recipeId}`);
+  if (childErrors.length > 0) {
+    redirect(
+      `${safeRedirect}?error=${encodeURIComponent(
+        `Saved, but some content failed to write: ${childErrors.join("; ")}. Please review and re-save.`
+      )}`
+    );
+  }
   redirect(safeRedirect);
 }
 
@@ -169,10 +189,10 @@ async function writeChildren(
   ingredients: IngredientInput[],
   steps: StepInput[],
   photoUrls: string[]
-) {
+): Promise<string[]> {
   const supabase = await createClient();
 
-  await Promise.all([
+  const results = await Promise.all([
     ingredients.length > 0
       ? supabase.from("recipe_ingredients").insert(
           ingredients.map((ing, i) => ({
@@ -185,7 +205,7 @@ async function writeChildren(
             note: ing.note || null,
           }))
         )
-      : Promise.resolve(),
+      : Promise.resolve({ error: null }),
     steps.length > 0
       ? supabase.from("recipe_steps").insert(
           steps.map((step, i) => ({
@@ -197,7 +217,7 @@ async function writeChildren(
             timer_minutes: step.timer_minutes || null,
           }))
         )
-      : Promise.resolve(),
+      : Promise.resolve({ error: null }),
     photoUrls.length > 0
       ? supabase.from("recipe_photos").insert(
           photoUrls.map((url, i) => ({
@@ -206,12 +226,31 @@ async function writeChildren(
             position: i,
           }))
         )
-      : Promise.resolve(),
+      : Promise.resolve({ error: null }),
   ]);
+
+  const labels = ["ingredients", "steps", "photos"];
+  return results
+    .map((r, i) => (r.error ? `${labels[i]} (${r.error.message})` : null))
+    .filter((m): m is string => m != null);
 }
 
 export async function deleteRecipe(recipeId: string) {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: recipe } = await supabase
+    .from("recipes")
+    .select("owner_id")
+    .eq("id", recipeId)
+    .single();
+  if (!recipe || recipe.owner_id !== user.id) {
+    redirect(`/recipes/${recipeId}?error=${encodeURIComponent("Only the recipe owner can delete it")}`);
+  }
+
   await supabase.from("recipes").delete().eq("id", recipeId);
   revalidatePath("/dashboard");
   redirect("/dashboard");
@@ -360,6 +399,9 @@ export async function restoreVersion(recipeId: string, versionId: string) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { data: canEdit } = await supabase.rpc("can_edit_recipe", { rid: recipeId });
+  if (!canEdit) redirect(`/recipes/${recipeId}?error=${encodeURIComponent("You don't have permission to edit this recipe")}`);
+
   const { data: version } = await supabase
     .from("recipe_versions")
     .select("snapshot")
@@ -369,6 +411,9 @@ export async function restoreVersion(recipeId: string, versionId: string) {
 
   if (!version) redirect(`/recipes/${recipeId}/edit`);
   const snapshot = version.snapshot as RecipeSnapshot;
+  if (!snapshot || typeof snapshot.title !== "string") {
+    redirect(`/recipes/${recipeId}/edit?error=${encodeURIComponent("That version's data looks corrupted and can't be restored")}`);
+  }
 
   // Snapshot the current (pre-restore) state too, so restoring is itself undoable.
   const { data: current } = await supabase
@@ -440,7 +485,13 @@ export async function inviteCollaborator(recipeId: string, formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const allowed = await checkRateLimit(supabase, user.id, "invite", 20, 60);
+  if (!allowed) {
+    redirect(`/recipes/${recipeId}/edit?error=${encodeURIComponent("Too many invites sent — try again in an hour")}`);
+  }
+
   const email = String(formData.get("email") || "").trim().toLowerCase();
+  const permission = formData.get("permission") === "view" ? "view" : "edit";
 
   const { data: matches } = await supabase.rpc("find_approved_user_by_email", {
     lookup_email: email,
@@ -448,14 +499,157 @@ export async function inviteCollaborator(recipeId: string, formData: FormData) {
   const match = matches?.[0];
 
   if (match) {
-    await supabase.from("recipe_collaborators").insert({
-      recipe_id: recipeId,
-      user_id: match.id,
-      invited_by: user.id,
-    });
+    await supabase
+      .from("recipe_collaborators")
+      .upsert(
+        { recipe_id: recipeId, user_id: match.id, invited_by: user.id, permission },
+        { onConflict: "recipe_id,user_id" }
+      );
     revalidatePath(`/recipes/${recipeId}/edit`);
     redirect(`/recipes/${recipeId}/edit?invited=1`);
   }
 
   redirect(`/recipes/${recipeId}/edit?error=${encodeURIComponent("No approved account found with that email")}`);
+}
+
+export async function removeCollaborator(recipeId: string, userId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  await supabase
+    .from("recipe_collaborators")
+    .delete()
+    .eq("recipe_id", recipeId)
+    .eq("user_id", userId);
+
+  revalidatePath(`/recipes/${recipeId}/edit`);
+  redirect(`/recipes/${recipeId}/edit`);
+}
+
+export async function createShareLink(recipeId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data } = await supabase
+    .from("recipes")
+    .update({ share_token: crypto.randomUUID() })
+    .eq("id", recipeId)
+    .select("share_token")
+    .single();
+
+  revalidatePath(`/recipes/${recipeId}/edit`);
+  return data?.share_token as string | undefined;
+}
+
+type ImportedRecipe = {
+  title: string;
+  description?: string | null;
+  servings?: number | null;
+  serving_unit?: string | null;
+  prep_minutes?: string | null;
+  cook_minutes?: string | null;
+  total_minutes?: string | null;
+  tags?: string[];
+  equipment?: string[];
+  video_url?: string | null;
+  ingredients?: { amount: number | null; unit: string | null; name: string; category: string | null; note: string | null }[];
+  steps?: { body: string; photo_urls?: string[]; is_pinned?: boolean; timer_minutes?: string | null }[];
+};
+
+export async function importRecipeJson(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const allowed = await checkRateLimit(supabase, user.id, "import", 10, 60);
+  if (!allowed) {
+    redirect(`/dashboard/import?error=${encodeURIComponent("Too many imports — try again in an hour")}`);
+  }
+
+  const raw = String(formData.get("json") || "");
+  let parsed: ImportedRecipe;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    redirect(`/dashboard/import?error=${encodeURIComponent("That's not valid JSON")}`);
+  }
+  if (!parsed || typeof parsed.title !== "string" || !parsed.title.trim()) {
+    redirect(`/dashboard/import?error=${encodeURIComponent("Missing a recipe title")}`);
+  }
+
+  const { data: recipe, error } = await supabase
+    .from("recipes")
+    .insert({
+      owner_id: user.id,
+      title: titleCase(parsed.title),
+      description: parsed.description ?? null,
+      servings: parsed.servings ?? 4,
+      serving_unit: parsed.serving_unit ?? "Serving",
+      prep_minutes: parsed.prep_minutes ?? null,
+      cook_minutes: parsed.cook_minutes ?? null,
+      total_minutes: parsed.total_minutes ?? null,
+      tags: parsed.tags ?? [],
+      equipment: parsed.equipment ?? [],
+      video_url: parsed.video_url ?? null,
+      is_published: false,
+    })
+    .select()
+    .single();
+
+  if (error || !recipe) {
+    redirect(`/dashboard/import?error=${encodeURIComponent(error?.message || "Import failed")}`);
+  }
+
+  const ingredients = (parsed.ingredients ?? []).map((ing) => ({
+    amount: ing.amount != null ? String(ing.amount) : "",
+    unit: ing.unit ?? "",
+    name: ing.name,
+    category: ing.category ?? "",
+    note: ing.note ?? "",
+  }));
+  const steps = (parsed.steps ?? []).map((step) => ({
+    body: step.body,
+    photo_urls: step.photo_urls ?? [],
+    is_pinned: step.is_pinned ?? false,
+    timer_minutes: step.timer_minutes ?? "",
+  }));
+
+  await writeChildren(recipe.id, ingredients, steps, []);
+  revalidatePath("/dashboard");
+  redirect(`/recipes/${recipe.id}/edit`);
+}
+
+export async function toggleFavorite(recipeId: string, isFavorite: boolean) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (isFavorite) {
+    await supabase.from("recipe_favorites").delete().eq("recipe_id", recipeId).eq("user_id", user.id);
+  } else {
+    await supabase.from("recipe_favorites").upsert({ recipe_id: recipeId, user_id: user.id });
+  }
+  revalidatePath("/");
+  revalidatePath("/dashboard");
+}
+
+export async function revokeShareLink(recipeId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  await supabase.from("recipes").update({ share_token: null }).eq("id", recipeId);
+  revalidatePath(`/recipes/${recipeId}/edit`);
 }

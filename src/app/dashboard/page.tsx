@@ -27,7 +27,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const { data: owned } = await supabase
+  const { data: owned, error: ownedError } = await supabase
     .from("recipes")
     .select("*, recipe_photos(url, position)")
     .eq("owner_id", user.id)
@@ -35,9 +35,10 @@ export default async function DashboardPage() {
 
   const { data: collabRows } = await supabase
     .from("recipe_collaborators")
-    .select("recipe_id")
+    .select("recipe_id, permission")
     .eq("user_id", user.id);
 
+  const collabPermission = new Map((collabRows ?? []).map((c) => [c.recipe_id, c.permission]));
   const collabIds = (collabRows ?? []).map((c) => c.recipe_id);
   let shared: typeof owned = [];
   if (collabIds.length > 0) {
@@ -54,17 +55,31 @@ export default async function DashboardPage() {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <div className="mb-8 flex items-center justify-between">
         <h1 className="font-serif text-3xl font-semibold">My Recipes</h1>
-        <Link
-          href="/dashboard/new"
-          className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--accent-hover)]"
-        >
-          + New recipe
-        </Link>
+        <div className="flex gap-3">
+          <Link
+            href="/dashboard/import"
+            className="rounded-full border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--bg-muted)]"
+          >
+            Import JSON
+          </Link>
+          <Link
+            href="/dashboard/new"
+            className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--accent-hover)]"
+          >
+            + New recipe
+          </Link>
+        </div>
       </div>
+
+      {ownedError && (
+        <p className="mb-6 rounded-[var(--radius)] border border-[var(--danger)] bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">
+          Couldn&apos;t load your recipes ({ownedError.message}). Try refreshing.
+        </p>
+      )}
 
       {!owned || owned.length === 0 ? (
         <p className="rounded-[var(--radius)] border border-dashed border-[var(--border)] px-6 py-16 text-center text-[var(--text-muted)]">
-          You haven&apos;t added any recipes yet.
+          {ownedError ? "" : "You haven't added any recipes yet."}
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -98,7 +113,7 @@ export default async function DashboardPage() {
                   key={recipe.id}
                   recipe={recipe}
                   photoUrl={photos[0]?.url}
-                  canEdit
+                  canEdit={collabPermission.get(recipe.id) === "edit"}
                   ownerTheme={recipe.profiles}
                 />
               );

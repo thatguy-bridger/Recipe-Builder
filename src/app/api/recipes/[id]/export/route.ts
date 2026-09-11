@@ -1,0 +1,46 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: recipe } = await supabase
+    .from("recipes")
+    .select(
+      "title, description, servings, serving_unit, prep_minutes, cook_minutes, total_minutes, tags, equipment, video_url, recipe_ingredients(position, amount, unit, name, category, note), recipe_steps(position, body, photo_urls, is_pinned, timer_minutes)"
+    )
+    .eq("id", id)
+    .single();
+
+  if (!recipe) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const exported = {
+    format: "recipe-boxed/v1",
+    title: recipe.title,
+    description: recipe.description,
+    servings: recipe.servings,
+    serving_unit: recipe.serving_unit,
+    prep_minutes: recipe.prep_minutes,
+    cook_minutes: recipe.cook_minutes,
+    total_minutes: recipe.total_minutes,
+    tags: recipe.tags,
+    equipment: recipe.equipment,
+    video_url: recipe.video_url,
+    ingredients: [...recipe.recipe_ingredients]
+      .sort((a, b) => a.position - b.position)
+      .map(({ amount, unit, name, category, note }) => ({ amount, unit, name, category, note })),
+    steps: [...recipe.recipe_steps]
+      .sort((a, b) => a.position - b.position)
+      .map(({ body, photo_urls, is_pinned, timer_minutes }) => ({ body, photo_urls, is_pinned, timer_minutes })),
+  };
+
+  const filename = `${recipe.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "recipe"}.json`;
+
+  return new NextResponse(JSON.stringify(exported, null, 2), {
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    },
+  });
+}

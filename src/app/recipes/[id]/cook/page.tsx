@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CookMode } from "@/components/CookMode";
+import { OfflineCacheWriter } from "@/components/OfflineCacheWriter";
 import type { RecipeWithDetails } from "@/types/recipe";
 
 type OwnerTheme = {
@@ -32,16 +33,31 @@ export default async function CookModePage({
   const steps = [...recipe.recipe_steps].sort((a, b) => a.position - b.position);
 
   return (
-    <CookMode
-      recipeId={recipe.id}
-      title={recipe.title}
-      baseServings={recipe.servings ?? 1}
-      servingUnit={recipe.serving_unit}
-      totalMinutes={recipe.total_minutes}
-      ownerTheme={recipe.profiles}
-      ingredients={ingredients}
-      equipment={recipe.equipment}
-      steps={steps}
-    />
+    <>
+      <OfflineCacheWriter
+        recipe={{
+          id: recipe.id,
+          title: recipe.title,
+          baseServings: recipe.servings ?? 1,
+          servingUnit: recipe.serving_unit,
+          totalMinutes: recipe.total_minutes,
+          ownerTheme: recipe.profiles,
+          ingredients,
+          equipment: recipe.equipment,
+          steps,
+        }}
+      />
+      <CookMode
+        recipeId={recipe.id}
+        title={recipe.title}
+        baseServings={recipe.servings ?? 1}
+        servingUnit={recipe.serving_unit}
+        totalMinutes={recipe.total_minutes}
+        ownerTheme={recipe.profiles}
+        ingredients={ingredients}
+        equipment={recipe.equipment}
+        steps={steps}
+      />
+    </>
   );
 }

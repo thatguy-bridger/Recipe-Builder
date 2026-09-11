@@ -49,6 +49,9 @@ export async function NavBar() {
             <Link href="/shopping-list" className="text-[var(--text-muted)] hover:text-[var(--text)]">
               Shopping List
             </Link>
+            <Link href="/offline" className="text-[var(--text-muted)] hover:text-[var(--text)]">
+              Offline
+            </Link>
             {user && profile?.status === "approved" && (
               <>
                 <Link href="/dashboard" className="text-[var(--text-muted)] hover:text-[var(--text)]">
