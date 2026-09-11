@@ -19,25 +19,18 @@ export default async function ImportRecipePage({
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
       <h1 className="mb-2 font-serif text-3xl font-semibold">Import a recipe</h1>
-      <p className="mb-2 text-[var(--text-muted)]">
-        Paste JSON exported from Recipe Boxed (or matching the same shape). The recipe is created
-        as a draft under your account, so you can review it before publishing.
+      <p className="mb-6 rounded-lg bg-[var(--accent-soft)] px-4 py-3 text-sm text-[var(--text)]">
+        Grabbing a recipe from another site? Use the{" "}
+        <a href="/bookmarklet" className="font-medium text-[var(--accent)] underline">
+          import bookmarklet
+        </a>{" "}
+        — it detects the recipe on any site and fills in the form below automatically. No
+        install needed, and it works in any browser.
       </p>
       <p className="mb-6 text-sm text-[var(--text-muted)]">
-        Grabbing a recipe from another site? Try the{" "}
-        <a href="/bookmarklet" className="text-[var(--accent)] underline">
-          one-click bookmarklet
-        </a>{" "}
-        — it fills this page in for you automatically. Or use the{" "}
-        <a
-          href="https://github.com/thatguy-bridger/Recipe-Builder/tree/main/extension"
-          target="_blank"
-          rel="noreferrer"
-          className="text-[var(--accent)] underline"
-        >
-          browser extension
-        </a>{" "}
-        to copy/download the JSON yourself.
+        Prefer to paste JSON by hand? You can do that below too — either exported from Recipe
+        Boxed elsewhere, or matching the same shape. The recipe is created as a draft under your
+        account, so you can review it before publishing.
       </p>
 
       {error && (

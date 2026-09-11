@@ -1,5 +1,13 @@
 # Recipe Boxed Exporter (browser extension)
 
+> **This extension is no longer the primary way to import recipes.** The
+> [import bookmarklet](../src/app/bookmarklet/page.tsx) (visit `/bookmarklet`
+> in the app, signed in) does the same detection with no install, in any
+> browser, and stays in sync automatically since it's built from this same
+> `extractor.js` on every page load. This extension is kept around for
+> anyone who'd rather have a toolbar button, but for most people the
+> bookmarklet is simpler and requires zero maintenance.
+
 Detects a recipe on the current page (via schema.org `Recipe` structured
 data — JSON-LD first, microdata as a fallback) and exports it as JSON in
 the same shape Recipe Boxed's **Import JSON** page (`/dashboard/import`)

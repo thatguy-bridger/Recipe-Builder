@@ -54,11 +54,11 @@ export default async function BookmarkletPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
-      <h1 className="mb-2 font-serif text-3xl font-semibold">Import bookmarklet</h1>
+      <h1 className="mb-2 font-serif text-3xl font-semibold">Import from the web</h1>
       <p className="mb-6 text-[var(--text-muted)]">
-        A one-click alternative to the browser extension: drag the button below to your
-        bookmarks bar. On any recipe page, click it to detect the recipe and open Recipe
-        Boxed&apos;s{" "}
+        Drag the button below to your bookmarks bar. It works on any recipe site, in any
+        browser — no extension to install, nothing to keep updated. On any recipe page, click
+        it to detect the recipe and open Recipe Boxed&apos;s{" "}
         <a href="/dashboard/import" className="text-[var(--accent)] underline">
           Import page
         </a>{" "}
@@ -83,16 +83,18 @@ export default async function BookmarkletPage() {
       </ol>
 
       <p className="mt-6 text-xs text-[var(--text-muted)]">
-        Prefer a browser extension instead? See the{" "}
+        This bookmarklet is the recommended way to import — it needs no installation, works in
+        every browser, and updates automatically since it&apos;s generated fresh from this page
+        each time you visit. The old{" "}
         <a
           href="https://github.com/thatguy-bridger/Recipe-Builder/tree/main/extension"
           target="_blank"
           rel="noreferrer"
           className="text-[var(--accent)] underline"
         >
-          Recipe Boxed Exporter extension
-        </a>
-        .
+          browser extension
+        </a>{" "}
+        still works if you&apos;d rather have a toolbar button, but isn&apos;t needed anymore.
       </p>
     </div>
   );

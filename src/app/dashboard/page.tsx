@@ -57,10 +57,10 @@ export default async function DashboardPage() {
         <h1 className="font-serif text-3xl font-semibold">My Recipes</h1>
         <div className="flex gap-3">
           <Link
-            href="/dashboard/import"
+            href="/bookmarklet"
             className="rounded-full border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--bg-muted)]"
           >
-            Import JSON
+            Import from web
           </Link>
           <Link
             href="/dashboard/new"
