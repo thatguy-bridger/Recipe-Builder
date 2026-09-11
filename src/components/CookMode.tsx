@@ -278,7 +278,7 @@ export function CookMode({
 
       <section className="flex flex-1 flex-col p-8 pb-24">
         <div className="flex w-full flex-1 flex-col gap-8">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <Link
                 href={`/recipes/${recipeId}`}
@@ -287,47 +287,59 @@ export function CookMode({
                 &larr; Exit cook mode
               </Link>
               <h1 className="font-serif text-xl font-semibold">{title}</h1>
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm text-[var(--text-muted)]">
-                  Step {current + 1} of {steps.length}
+              <span className="text-sm text-[var(--text-muted)]">
+                Step {current + 1} of {steps.length}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div
+                className={`flex items-center gap-3 rounded-[var(--radius)] border-2 px-4 py-2 shadow-[var(--shadow)] ${
+                  mainDone
+                    ? "border-[var(--danger)] bg-[var(--danger)]/10"
+                    : "border-[var(--accent)] bg-[var(--accent-soft)]"
+                }`}
+              >
+                <span
+                  className={`text-3xl font-bold leading-none tabular-nums ${
+                    mainDone ? "text-[var(--danger)]" : "text-[var(--accent)]"
+                  }`}
+                >
+                  {mainDone ? "Time's up!" : formatDuration(mainRemaining)}
                 </span>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <span
-                    className={`tabular-nums font-semibold ${mainDone ? "text-[var(--danger)]" : ""}`}
-                  >
-                    {mainDone ? "Time's up!" : formatDuration(mainRemaining)}
-                  </span>
+                <div className="flex flex-col gap-1">
                   <button
                     type="button"
                     onClick={mainTimer.running ? pauseMain : resumeMain}
-                    className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
+                    className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
                   >
                     {mainTimer.running ? "Pause" : "Resume"}
                   </button>
                   <button
                     type="button"
                     onClick={resetMain}
-                    className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
+                    className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
                   >
                     Reset
                   </button>
                 </div>
               </div>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                Show
+                <select
+                  value={extraSteps}
+                  onChange={(e) => setExtraSteps(Number(e.target.value))}
+                  className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1"
+                >
+                  <option value={0}>Just neighbors</option>
+                  <option value={1}>+1 more</option>
+                  <option value={3}>+3 more</option>
+                  <option value={5}>+5 more</option>
+                  <option value={9999}>All steps</option>
+                </select>
+              </label>
             </div>
-            <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-              Show
-              <select
-                value={extraSteps}
-                onChange={(e) => setExtraSteps(Number(e.target.value))}
-                className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1"
-              >
-                <option value={0}>Just neighbors</option>
-                <option value={1}>+1 more</option>
-                <option value={3}>+3 more</option>
-                <option value={5}>+5 more</option>
-                <option value={9999}>All steps</option>
-              </select>
-            </label>
           </div>
 
           <div className="flex flex-1 flex-col gap-3">
@@ -404,30 +416,42 @@ export function CookMode({
                       multiMaxHeightClass={isCurrent ? "max-h-52" : "max-h-20"}
                     />
                     {isCurrent && subTimer && (
-                      <div className="mt-3 flex items-center gap-2 text-sm" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className={`mt-3 flex items-center gap-3 rounded-[var(--radius)] border-2 px-4 py-2 ${
+                          subTimer.remaining === 0
+                            ? "border-[var(--danger)] bg-[var(--danger)]/10"
+                            : "border-[var(--accent)] bg-[var(--bg-elevated)]"
+                        }`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
+                          Step timer
+                        </span>
                         <span
-                          className={`tabular-nums font-semibold ${
+                          className={`text-2xl font-bold leading-none tabular-nums ${
                             subTimer.remaining === 0 ? "text-[var(--danger)]" : "text-[var(--accent)]"
                           }`}
                         >
                           {subTimer.remaining === 0 ? "Timer done" : formatDuration(subTimer.remaining)}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setSubTimer((t) => (t ? { ...t, running: !t.running } : t))}
-                          className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
-                        >
-                          {subTimer.running ? "Pause" : "Resume"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSubTimer((t) => (t ? { ...t, remaining: t.total, running: true } : t))
-                          }
-                          className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
-                        >
-                          Reset
-                        </button>
+                        <div className="ml-auto flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSubTimer((t) => (t ? { ...t, running: !t.running } : t))}
+                            className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-1 text-xs font-medium hover:bg-[var(--bg-muted)]"
+                          >
+                            {subTimer.running ? "Pause" : "Resume"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSubTimer((t) => (t ? { ...t, remaining: t.total, running: true } : t))
+                            }
+                            className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-1 text-xs font-medium hover:bg-[var(--bg-muted)]"
+                          >
+                            Reset
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
