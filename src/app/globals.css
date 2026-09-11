@@ -16,6 +16,17 @@
   --shadow: 0 1px 2px rgba(43, 36, 32, 0.04), 0 8px 24px rgba(43, 36, 32, 0.06);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+
+  /* The app's true defaults, theme-aware but never touched by a viewer's
+     personal design language or a recipe owner's branding — recipe-scoped
+     surfaces fall back to these (via var(...) indirection, not a hardcoded
+     copy) so they stay visually isolated from whatever a page's ancestors
+     happen to be overriding --accent/--radius/--font-serif to. */
+  --accent-default: #c1622e;
+  --accent-hover-default: #a84f22;
+  --accent-soft-default: #f3ded0;
+  --radius-default: 14px;
+  --font-serif-default: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 }
 
 :root[data-theme="dark"],
@@ -33,6 +44,9 @@
     --success: #7bb583;
     --danger: #e08078;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --accent-default: #e08a52;
+    --accent-hover-default: #ef9c63;
+    --accent-soft-default: #3d2c1f;
   }
 }
 
@@ -49,6 +63,9 @@
   --success: #7bb583;
   --danger: #e08078;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --accent-default: #e08a52;
+  --accent-hover-default: #ef9c63;
+  --accent-soft-default: #3d2c1f;
 }
 
 @theme inline {

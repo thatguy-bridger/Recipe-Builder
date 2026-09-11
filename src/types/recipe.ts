@@ -8,6 +8,7 @@ export type Profile = {
   theme_radius: string | null;
   theme_font: string | null;
   theme_watermark_url: string | null;
+  theme_apply_to_app: boolean;
 };
 
 export type Ingredient = {

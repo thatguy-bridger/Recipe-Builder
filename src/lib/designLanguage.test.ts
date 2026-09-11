@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildThemeStyle, isFontPreset, isRadiusPreset } from "./designLanguage";
+import { buildIsolatedThemeStyle, buildThemeStyle, isFontPreset, isRadiusPreset } from "./designLanguage";
 
 describe("isRadiusPreset / isFontPreset", () => {
   it("accepts known presets", () => {
@@ -71,5 +71,56 @@ describe("buildThemeStyle", () => {
       theme_font: "wacky",
     });
     expect(style).toEqual({});
+  });
+});
+
+describe("buildIsolatedThemeStyle", () => {
+  it("pins every property to the app defaults when there's no profile", () => {
+    const style = buildIsolatedThemeStyle(null) as Record<string, string>;
+    expect(style["--accent"]).toBe("var(--accent-default)");
+    expect(style["--accent-hover"]).toBe("var(--accent-hover-default)");
+    expect(style["--accent-soft"]).toBe("var(--accent-soft-default)");
+    expect(style["--radius"]).toBe("var(--radius-default)");
+    expect(style["--font-serif"]).toBe("var(--font-serif-default)");
+  });
+
+  it("pins every property to the app defaults when nothing is customized", () => {
+    const style = buildIsolatedThemeStyle({
+      theme_accent: null,
+      theme_radius: null,
+      theme_font: null,
+    }) as Record<string, string>;
+    expect(style["--accent"]).toBe("var(--accent-default)");
+    expect(style["--radius"]).toBe("var(--radius-default)");
+    expect(style["--font-serif"]).toBe("var(--font-serif-default)");
+  });
+
+  it("uses the owner's custom accent instead of the default", () => {
+    const style = buildIsolatedThemeStyle({
+      theme_accent: "#3355ff",
+      theme_radius: null,
+      theme_font: null,
+    }) as Record<string, string>;
+    expect(style["--accent"]).toBe("#3355ff");
+    expect(style["--radius"]).toBe("var(--radius-default)");
+  });
+
+  it("falls back to the default accent for an invalid custom color", () => {
+    const style = buildIsolatedThemeStyle({
+      theme_accent: "not-a-color",
+      theme_radius: null,
+      theme_font: null,
+    }) as Record<string, string>;
+    expect(style["--accent"]).toBe("var(--accent-default)");
+  });
+
+  it("uses the owner's radius and font presets instead of the defaults", () => {
+    const style = buildIsolatedThemeStyle({
+      theme_accent: null,
+      theme_radius: "round",
+      theme_font: "modern",
+    }) as Record<string, string>;
+    expect(style["--radius"]).toBe("22px");
+    expect(style["--font-serif"]).toContain("ui-sans-serif");
   });
 });

@@ -1,4 +1,4 @@
-import { buildThemeStyle } from "@/lib/designLanguage";
+import { buildIsolatedThemeStyle } from "@/lib/designLanguage";
 
 type ThemeProfile = {
   theme_accent: string | null;
@@ -23,7 +23,7 @@ export function RecipeThemeScope({
   className?: string;
   children: React.ReactNode;
 }) {
-  const style = buildThemeStyle(profile);
+  const style = buildIsolatedThemeStyle(profile);
   const positionClass = {
     "bottom-right": "bottom-2 right-2",
     "bottom-left": "bottom-2 left-2",

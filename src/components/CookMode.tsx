@@ -14,7 +14,7 @@ import type { Ingredient, Step } from "@/types/recipe";
 import { ServingScaler } from "./ServingScaler";
 import { StepPhotos } from "./StepPhotos";
 import { remainingSeconds, useCookTimer } from "./CookTimerProvider";
-import { buildThemeStyle } from "@/lib/designLanguage";
+import { buildIsolatedThemeStyle } from "@/lib/designLanguage";
 import { formatDuration, parseMinutesText } from "@/lib/duration";
 import { findMentionedIngredients, splitByTerms } from "@/lib/ingredientMatch";
 
@@ -226,7 +226,7 @@ export function CookMode({
   const mentionedNames = useMemo(() => mentionedIngredients.map((i) => i.name), [mentionedIngredients]);
 
   return (
-    <div className="relative flex w-full" style={buildThemeStyle(ownerTheme)}>
+    <div className="relative flex w-full" style={buildIsolatedThemeStyle(ownerTheme)}>
       {ownerTheme?.theme_watermark_url && (
         // eslint-disable-next-line @next/next/no-img-element
         <img

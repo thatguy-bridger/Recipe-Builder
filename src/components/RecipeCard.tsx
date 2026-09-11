@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Recipe } from "@/types/recipe";
-import { buildThemeStyle } from "@/lib/designLanguage";
+import { buildIsolatedThemeStyle } from "@/lib/designLanguage";
 
 type OwnerTheme = {
   theme_accent: string | null;
@@ -23,7 +23,7 @@ export function RecipeCard({
   return (
     <div
       className="group relative flex flex-col overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow)] transition-transform hover:-translate-y-0.5"
-      style={buildThemeStyle(ownerTheme)}
+      style={buildIsolatedThemeStyle(ownerTheme)}
     >
       <Link href={`/recipes/${recipe.id}`} className="absolute inset-0 z-0" aria-label={recipe.title} />
       {ownerTheme?.theme_watermark_url && (

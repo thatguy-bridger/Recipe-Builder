@@ -24,6 +24,8 @@ export async function updateDesignLanguage(formData: FormData) {
   const watermarkRaw = String(formData.get("theme_watermark_url") || "").trim();
   const themeWatermarkUrl = watermarkRaw || null;
 
+  const themeApplyToApp = formData.get("theme_apply_to_app") === "on";
+
   await supabase
     .from("profiles")
     .update({
@@ -31,6 +33,7 @@ export async function updateDesignLanguage(formData: FormData) {
       theme_radius: themeRadius,
       theme_font: themeFont,
       theme_watermark_url: themeWatermarkUrl,
+      theme_apply_to_app: themeApplyToApp,
     })
     .eq("id", user.id);
 

@@ -4,6 +4,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { CookTimerProvider } from "@/components/CookTimerProvider";
 import { NavBar } from "@/components/NavBar";
+import { createClient } from "@/lib/supabase/server";
+import { buildThemeStyle } from "@/lib/designLanguage";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,7 +51,30 @@ const themeInitScript = `
 })();
 `;
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // A viewer's own personal design language (opt-in — see /settings) applies
+  // to the general app chrome only. It's set here, at the root, precisely so
+  // that recipe-scoped surfaces (RecipeCard, the recipe detail page, Cook
+  // Mode) can each pin their own --accent/--radius/--font-serif back to
+  // either the recipe owner's branding or the app default, isolating recipe
+  // content from this personal skin regardless of who's viewing it.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let personalSkin: React.CSSProperties = {};
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("theme_accent, theme_radius, theme_font, theme_apply_to_app")
+      .eq("id", user.id)
+      .single();
+    if (profile?.theme_apply_to_app) {
+      personalSkin = buildThemeStyle(profile);
+    }
+  }
+
   return (
     <html
       lang="en"
@@ -59,7 +84,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col" style={personalSkin}>
         <ThemeProvider>
           <CookTimerProvider>
             <NavBar />

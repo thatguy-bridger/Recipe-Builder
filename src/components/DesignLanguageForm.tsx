@@ -24,6 +24,7 @@ export function DesignLanguageForm({
     theme_radius: string | null;
     theme_font: string | null;
     theme_watermark_url: string | null;
+    theme_apply_to_app: boolean;
   };
 }) {
   const [accent, setAccent] = useState(initial.theme_accent ?? DEFAULT_ACCENT);
@@ -37,6 +38,7 @@ export function DesignLanguageForm({
     initial.theme_font && initial.theme_font in FONT_PRESETS ? (initial.theme_font as FontPreset) : null
   );
   const [watermarkUrl, setWatermarkUrl] = useState(initial.theme_watermark_url ?? "");
+  const [applyToApp, setApplyToApp] = useState(initial.theme_apply_to_app);
   const formRef = useRef<HTMLFormElement>(null);
 
   const previewProfile = {
@@ -52,6 +54,24 @@ export function DesignLanguageForm({
       <input type="hidden" name="theme_radius" value={radius ?? ""} />
       <input type="hidden" name="theme_font" value={font ?? ""} />
       <input type="hidden" name="theme_watermark_url" value={watermarkUrl} />
+
+      <section className="flex flex-col gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-muted)] p-4">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            name="theme_apply_to_app"
+            checked={applyToApp}
+            onChange={(e) => setApplyToApp(e.target.checked)}
+          />
+          <span className="font-medium">Also use this as my own personal look for the app</span>
+        </label>
+        <p className="text-sm text-[var(--text-muted)]">
+          Off by default. Your recipes always show this design language to everyone, regardless of
+          this setting. Turning this on additionally applies it to the rest of the app — nav bar,
+          dashboard, browse page — but only in your own view. Other people&apos;s recipes you look
+          at keep their own look (or the app default) either way.
+        </p>
+      </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="font-serif text-lg font-semibold">Accent color</h2>

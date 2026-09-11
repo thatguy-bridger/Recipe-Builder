@@ -54,11 +54,11 @@ type ThemeProfile = {
   theme_font: string | null;
 };
 
-// Builds inline CSS custom-property overrides for a recipe owner's design
-// language. Scoping these on a wrapping element (rather than editing
-// globals.css) means every existing `var(--accent)` / `var(--radius)` /
-// `var(--font-serif)` reference throughout the app picks them up
-// automatically for that subtree, with no changes needed at each use site.
+// Builds inline CSS custom-property overrides for a viewer's own personal
+// design language — used on the general app chrome (nav bar, dashboard,
+// browse page, etc). Only sets the properties the viewer actually
+// customized; anything left unset just inherits normally, same as if this
+// wrapper weren't here at all.
 export function buildThemeStyle(profile: ThemeProfile | null | undefined): React.CSSProperties {
   if (!profile) return {};
   const style: Record<string, string> = {};
@@ -78,5 +78,29 @@ export function buildThemeStyle(profile: ThemeProfile | null | undefined): React
     style["--font-serif"] = FONT_PRESETS[profile.theme_font].value;
   }
 
+  return style as React.CSSProperties;
+}
+
+// Builds inline CSS custom-property overrides for a recipe's own look —
+// used on RecipeCard, the recipe detail page, and Cook Mode. Unlike
+// buildThemeStyle above, this ALWAYS pins every property, falling back to
+// the app's true --*-default values (via var() indirection, not a copied
+// value) rather than omitting them. That isolates a recipe's appearance
+// from whatever ancestor context it's rendered in — most importantly, a
+// viewer's own personal design language never leaks into recipe content,
+// whether the recipe's owner has customized their look or not.
+export function buildIsolatedThemeStyle(profile: ThemeProfile | null | undefined): React.CSSProperties {
+  const variants = profile?.theme_accent ? accentVariants(profile.theme_accent) : null;
+  const style: Record<string, string> = {
+    "--accent": variants ? profile!.theme_accent! : "var(--accent-default)",
+    "--accent-hover": variants ? variants.hover : "var(--accent-hover-default)",
+    "--accent-soft": variants ? variants.soft : "var(--accent-soft-default)",
+    "--radius": isRadiusPreset(profile?.theme_radius ?? null)
+      ? RADIUS_PRESETS[profile!.theme_radius as RadiusPreset].value
+      : "var(--radius-default)",
+    "--font-serif": isFontPreset(profile?.theme_font ?? null)
+      ? FONT_PRESETS[profile!.theme_font as FontPreset].value
+      : "var(--font-serif-default)",
+  };
   return style as React.CSSProperties;
 }

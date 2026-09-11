@@ -17,7 +17,7 @@ export default async function SettingsPage({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("theme_accent, theme_radius, theme_font, theme_watermark_url")
+    .select("theme_accent, theme_radius, theme_font, theme_watermark_url, theme_apply_to_app")
     .eq("id", user.id)
     .single();
 
@@ -44,6 +44,7 @@ export default async function SettingsPage({
             theme_radius: null,
             theme_font: null,
             theme_watermark_url: null,
+            theme_apply_to_app: false,
           }
         }
       />
