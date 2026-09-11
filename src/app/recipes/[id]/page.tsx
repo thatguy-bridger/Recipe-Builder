@@ -39,7 +39,7 @@ export default async function RecipeDetailPage({
   const embedUrl = recipe.video_url ? toEmbedUrl(recipe.video_url) : null;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <div className="mb-2 flex items-center justify-between gap-4">
         <Link href="/" className="text-sm text-[var(--text-muted)] hover:text-[var(--text)]">
           &larr; Back to recipes
@@ -115,53 +115,50 @@ export default async function RecipeDetailPage({
         </div>
       )}
 
-      <div className="mt-10 grid grid-cols-1 gap-10 sm:grid-cols-[1fr_1.4fr]">
-        <section>
-          <h2 className="font-serif text-xl font-semibold">Ingredients</h2>
-          <div className="mt-3">
-            <ServingScaler
-              baseServings={recipe.servings ?? 1}
-              servingUnit={recipe.serving_unit}
-              ingredients={ingredients}
-            />
+      <section className="mt-10">
+        <h2 className="font-serif text-xl font-semibold">Ingredients</h2>
+        <div className="mt-3">
+          <ServingScaler
+            baseServings={recipe.servings ?? 1}
+            servingUnit={recipe.serving_unit}
+            ingredients={ingredients}
+          />
+        </div>
+
+        {recipe.equipment.length > 0 && (
+          <div className="mt-6">
+            <h2 className="font-serif text-xl font-semibold">Equipment</h2>
+            <ul className="mt-3 flex flex-col gap-1 text-sm">
+              {recipe.equipment.map((eq) => (
+                <li key={eq}>{eq}</li>
+              ))}
+            </ul>
           </div>
+        )}
+      </section>
 
-          {recipe.equipment.length > 0 && (
-            <div className="mt-8">
-              <h2 className="font-serif text-xl font-semibold">Equipment</h2>
-              <ul className="mt-3 flex flex-col gap-1 text-sm">
-                {recipe.equipment.map((eq) => (
-                  <li key={eq}>{eq}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </section>
-
-        <section>
-          <h2 className="font-serif text-xl font-semibold">Steps</h2>
-          <ol className="mt-3 flex flex-col gap-6">
-            {steps.map((step, i) => (
-              <li key={step.id} className="flex gap-4">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent)]">
-                  {i + 1}
-                </span>
-                <div className="flex-1">
-                  <p className="leading-relaxed">{step.body}</p>
-                  {step.photo_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={step.photo_url}
-                      alt=""
-                      className="mt-2 max-w-xs rounded-lg object-cover"
-                    />
-                  )}
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-      </div>
+      <section className="mt-10">
+        <h2 className="font-serif text-xl font-semibold">Steps</h2>
+        <ol className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] items-start gap-4">
+          {steps.map((step, i) => (
+            <li
+              key={step.id}
+              className="flex gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-4"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent)]">
+                {i + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="leading-relaxed">{step.body}</p>
+                {step.photo_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={step.photo_url} alt="" className="mt-2 w-full rounded-lg" />
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
     </div>
   );
 }

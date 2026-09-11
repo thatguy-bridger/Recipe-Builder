@@ -239,76 +239,83 @@ export function CookMode({
                 <option value={1}>+1 more</option>
                 <option value={3}>+3 more</option>
                 <option value={5}>+5 more</option>
+                <option value={9999}>All steps</option>
               </select>
             </label>
           </div>
 
           <div className="flex flex-1 flex-col gap-3">
-            {pinnedSteps.map((step) => {
-              const idx = steps.indexOf(step);
-              return (
-                <div
-                  key={step.id}
-                  onClick={() => setCurrent(idx)}
-                  className="cursor-pointer rounded-[var(--radius)] border border-[var(--accent)] bg-[var(--accent-soft)] p-3 shadow-[var(--shadow)]"
-                >
-                  <div className="flex items-start gap-2.5">
-                    <span className="mt-0.5 shrink-0 text-sm" aria-label="Always shown">
-                      📌
-                    </span>
-                    <p className="text-sm leading-relaxed">{step.body}</p>
-                  </div>
-                  {step.photo_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={step.photo_url}
-                      alt=""
-                      className="mt-3 max-h-28 w-full rounded-lg object-cover"
-                    />
-                  )}
-                </div>
-              );
-            })}
-            {visibleSteps.map((step) => {
-              const idx = steps.indexOf(step);
-              const isCurrent = idx === current;
-              return (
-                <div
-                  key={step.id}
-                  onClick={() => setCurrent(idx)}
-                  className={`cursor-pointer rounded-[var(--radius)] border transition-all ${
-                    isCurrent
-                      ? "border-[var(--accent)] bg-[var(--accent-soft)] p-5 shadow-[var(--shadow)]"
-                      : "border-[var(--border)] bg-[var(--bg-elevated)] p-3 opacity-60"
-                  }`}
-                >
-                  <div className={`flex items-start ${isCurrent ? "gap-4" : "gap-2.5"}`}>
-                    <span
-                      className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${
-                        isCurrent
-                          ? "h-8 w-8 bg-[var(--accent)] text-base text-white"
-                          : "h-6 w-6 bg-[var(--bg-muted)] text-xs text-[var(--text-muted)]"
-                      }`}
+            {pinnedSteps.length > 0 && (
+              <div className="flex flex-col gap-3">
+                {pinnedSteps.map((step) => {
+                  const idx = steps.indexOf(step);
+                  return (
+                    <div
+                      key={step.id}
+                      onClick={() => setCurrent(idx)}
+                      className="cursor-pointer rounded-[var(--radius)] border border-[var(--accent)] bg-[var(--accent-soft)] p-3 shadow-[var(--shadow)]"
                     >
-                      {idx + 1}
-                    </span>
-                    <p className={isCurrent ? "text-lg leading-relaxed" : "text-sm leading-relaxed"}>
-                      {step.body}
-                    </p>
+                      <div className="flex items-start gap-2.5">
+                        <span className="mt-0.5 shrink-0 text-sm" aria-label="Always shown">
+                          📌
+                        </span>
+                        <p className="text-sm leading-relaxed">{step.body}</p>
+                      </div>
+                      {step.photo_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={step.photo_url}
+                          alt=""
+                          className="mt-3 max-h-28 w-full rounded-lg object-cover"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] items-start gap-3">
+              {visibleSteps.map((step) => {
+                const idx = steps.indexOf(step);
+                const isCurrent = idx === current;
+                return (
+                  <div
+                    key={step.id}
+                    onClick={() => setCurrent(idx)}
+                    className={`cursor-pointer rounded-[var(--radius)] border transition-all ${
+                      isCurrent
+                        ? "col-span-full border-[var(--accent)] bg-[var(--accent-soft)] p-5 shadow-[var(--shadow)]"
+                        : "border-[var(--border)] bg-[var(--bg-elevated)] p-3 opacity-60"
+                    }`}
+                  >
+                    <div className={`flex items-start ${isCurrent ? "gap-4" : "gap-2.5"}`}>
+                      <span
+                        className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${
+                          isCurrent
+                            ? "h-8 w-8 bg-[var(--accent)] text-base text-white"
+                            : "h-6 w-6 bg-[var(--bg-muted)] text-xs text-[var(--text-muted)]"
+                        }`}
+                      >
+                        {idx + 1}
+                      </span>
+                      <p className={isCurrent ? "text-lg leading-relaxed" : "text-sm leading-relaxed"}>
+                        {step.body}
+                      </p>
+                    </div>
+                    {step.photo_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={step.photo_url}
+                        alt=""
+                        className={`mt-3 w-full rounded-lg object-cover ${
+                          isCurrent ? "max-h-64" : "max-h-28"
+                        }`}
+                      />
+                    )}
                   </div>
-                  {step.photo_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={step.photo_url}
-                      alt=""
-                      className={`mt-3 w-full rounded-lg object-cover ${
-                        isCurrent ? "max-h-64" : "max-h-28"
-                      }`}
-                    />
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
         </div>
