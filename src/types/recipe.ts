@@ -4,6 +4,10 @@ export type Profile = {
   role: "user" | "admin";
   status: "pending" | "approved" | "rejected";
   created_at: string;
+  theme_accent: string | null;
+  theme_radius: string | null;
+  theme_font: string | null;
+  theme_watermark_url: string | null;
 };
 
 export type Ingredient = {

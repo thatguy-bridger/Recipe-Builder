@@ -11,7 +11,7 @@ export default async function HomePage() {
   const { data: recipes } = await supabase
     .from("recipes")
     .select(
-      "*, recipe_photos(url, position), recipe_ingredients(name, category, note), recipe_steps(body)"
+      "*, recipe_photos(url, position), recipe_ingredients(name, category, note), recipe_steps(body), profiles!recipes_owner_id_fkey(theme_accent, theme_radius, theme_font, theme_watermark_url)"
     )
     .eq("is_published", true)
     .order("created_at", { ascending: false });

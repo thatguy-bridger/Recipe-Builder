@@ -3,8 +3,17 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ServingScaler } from "@/components/ServingScaler";
 import { StepPhotos } from "@/components/StepPhotos";
+import { RecipeThemeScope } from "@/components/RecipeThemeScope";
 import { toEmbedUrl } from "@/lib/video";
 import type { RecipeWithDetails } from "@/types/recipe";
+
+type OwnerProfile = {
+  display_name: string | null;
+  theme_accent: string | null;
+  theme_radius: string | null;
+  theme_font: string | null;
+  theme_watermark_url: string | null;
+};
 
 export default async function RecipeDetailPage({
   params,
@@ -21,10 +30,10 @@ export default async function RecipeDetailPage({
   const { data: recipe } = await supabase
     .from("recipes")
     .select(
-      "*, recipe_ingredients(*), recipe_steps(*), recipe_photos(*), profiles!recipes_owner_id_fkey(display_name)"
+      "*, recipe_ingredients(*), recipe_steps(*), recipe_photos(*), profiles!recipes_owner_id_fkey(display_name, theme_accent, theme_radius, theme_font, theme_watermark_url)"
     )
     .eq("id", id)
-    .single<RecipeWithDetails & { profiles: { display_name: string | null } | null }>();
+    .single<RecipeWithDetails & { profiles: OwnerProfile | null }>();
 
   if (!recipe) notFound();
 
@@ -40,7 +49,7 @@ export default async function RecipeDetailPage({
   const embedUrl = recipe.video_url ? toEmbedUrl(recipe.video_url) : null;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+    <RecipeThemeScope profile={recipe.profiles} className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       <div className="mb-2 flex items-center justify-between gap-4">
         <Link href="/" className="text-sm text-[var(--text-muted)] hover:text-[var(--text)]">
           &larr; Back to recipes
@@ -158,6 +167,6 @@ export default async function RecipeDetailPage({
           ))}
         </ol>
       </section>
-    </div>
+    </RecipeThemeScope>
   );
 }

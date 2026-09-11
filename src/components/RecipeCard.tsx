@@ -1,18 +1,39 @@
 import Link from "next/link";
 import type { Recipe } from "@/types/recipe";
+import { buildThemeStyle } from "@/lib/designLanguage";
+
+type OwnerTheme = {
+  theme_accent: string | null;
+  theme_radius: string | null;
+  theme_font: string | null;
+  theme_watermark_url: string | null;
+};
 
 export function RecipeCard({
   recipe,
   photoUrl,
   canEdit = false,
+  ownerTheme,
 }: {
   recipe: Recipe;
   photoUrl?: string;
   canEdit?: boolean;
+  ownerTheme?: OwnerTheme | null;
 }) {
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow)] transition-transform hover:-translate-y-0.5">
+    <div
+      className="group relative flex flex-col overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow)] transition-transform hover:-translate-y-0.5"
+      style={buildThemeStyle(ownerTheme)}
+    >
       <Link href={`/recipes/${recipe.id}`} className="absolute inset-0 z-0" aria-label={recipe.title} />
+      {ownerTheme?.theme_watermark_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={ownerTheme.theme_watermark_url}
+          alt=""
+          className="pointer-events-none absolute bottom-2 left-2 z-10 h-6 w-6 rounded-full object-cover opacity-80 shadow-[var(--shadow)]"
+        />
+      )}
 
       <div className="pointer-events-none flex flex-1 flex-col">
         <div className="aspect-[4/3] w-full overflow-hidden bg-[var(--bg-muted)]">

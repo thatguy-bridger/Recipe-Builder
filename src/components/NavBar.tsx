@@ -50,9 +50,14 @@ export async function NavBar() {
               Shopping List
             </Link>
             {user && profile?.status === "approved" && (
-              <Link href="/dashboard" className="text-[var(--text-muted)] hover:text-[var(--text)]">
-                My Recipes
-              </Link>
+              <>
+                <Link href="/dashboard" className="text-[var(--text-muted)] hover:text-[var(--text)]">
+                  My Recipes
+                </Link>
+                <Link href="/settings" className="text-[var(--text-muted)] hover:text-[var(--text)]">
+                  Design
+                </Link>
+              </>
             )}
             {profile?.role === "admin" && (
               <Link href="/admin" className="text-[var(--text-muted)] hover:text-[var(--text)]">

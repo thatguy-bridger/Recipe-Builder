@@ -12,7 +12,7 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("status, display_name")
+    .select("status, display_name, theme_accent, theme_radius, theme_font, theme_watermark_url")
     .eq("id", user.id)
     .single();
 
@@ -43,7 +43,9 @@ export default async function DashboardPage() {
   if (collabIds.length > 0) {
     const { data } = await supabase
       .from("recipes")
-      .select("*, recipe_photos(url, position)")
+      .select(
+        "*, recipe_photos(url, position), profiles!recipes_owner_id_fkey(theme_accent, theme_radius, theme_font, theme_watermark_url)"
+      )
       .in("id", collabIds);
     shared = data ?? [];
   }
@@ -71,7 +73,13 @@ export default async function DashboardPage() {
               (a: { position: number }, b: { position: number }) => a.position - b.position
             );
             return (
-              <RecipeCard key={recipe.id} recipe={recipe} photoUrl={photos[0]?.url} canEdit />
+              <RecipeCard
+                key={recipe.id}
+                recipe={recipe}
+                photoUrl={photos[0]?.url}
+                canEdit
+                ownerTheme={profile}
+              />
             );
           })}
         </div>
@@ -86,8 +94,14 @@ export default async function DashboardPage() {
                 (a: { position: number }, b: { position: number }) => a.position - b.position
               );
               return (
-              <RecipeCard key={recipe.id} recipe={recipe} photoUrl={photos[0]?.url} canEdit />
-            );
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  photoUrl={photos[0]?.url}
+                  canEdit
+                  ownerTheme={recipe.profiles}
+                />
+              );
             })}
           </div>
         </>

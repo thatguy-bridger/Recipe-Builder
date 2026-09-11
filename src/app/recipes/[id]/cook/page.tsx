@@ -3,6 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { CookMode } from "@/components/CookMode";
 import type { RecipeWithDetails } from "@/types/recipe";
 
+type OwnerTheme = {
+  theme_accent: string | null;
+  theme_radius: string | null;
+  theme_font: string | null;
+  theme_watermark_url: string | null;
+};
+
 export default async function CookModePage({
   params,
 }: {
@@ -13,9 +20,11 @@ export default async function CookModePage({
 
   const { data: recipe } = await supabase
     .from("recipes")
-    .select("*, recipe_ingredients(*), recipe_steps(*)")
+    .select(
+      "*, recipe_ingredients(*), recipe_steps(*), profiles!recipes_owner_id_fkey(theme_accent, theme_radius, theme_font, theme_watermark_url)"
+    )
     .eq("id", id)
-    .single<RecipeWithDetails>();
+    .single<RecipeWithDetails & { profiles: OwnerTheme | null }>();
 
   if (!recipe) notFound();
 
@@ -29,6 +38,7 @@ export default async function CookModePage({
       baseServings={recipe.servings ?? 1}
       servingUnit={recipe.serving_unit}
       totalMinutes={recipe.total_minutes}
+      ownerTheme={recipe.profiles}
       ingredients={ingredients}
       equipment={recipe.equipment}
       steps={steps}

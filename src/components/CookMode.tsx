@@ -14,6 +14,7 @@ import type { Ingredient, Step } from "@/types/recipe";
 import { ServingScaler } from "./ServingScaler";
 import { StepPhotos } from "./StepPhotos";
 import { remainingSeconds, useCookTimer } from "./CookTimerProvider";
+import { buildThemeStyle } from "@/lib/designLanguage";
 import { formatDuration, parseMinutesText } from "@/lib/duration";
 import { findMentionedIngredients, splitByTerms } from "@/lib/ingredientMatch";
 
@@ -25,6 +26,7 @@ export function CookMode({
   baseServings,
   servingUnit,
   totalMinutes,
+  ownerTheme,
   ingredients,
   equipment,
   steps,
@@ -34,6 +36,12 @@ export function CookMode({
   baseServings: number;
   servingUnit: string;
   totalMinutes: string | null;
+  ownerTheme?: {
+    theme_accent: string | null;
+    theme_radius: string | null;
+    theme_font: string | null;
+    theme_watermark_url: string | null;
+  } | null;
   ingredients: Ingredient[];
   equipment: string[];
   steps: Step[];
@@ -218,7 +226,15 @@ export function CookMode({
   const mentionedNames = useMemo(() => mentionedIngredients.map((i) => i.name), [mentionedIngredients]);
 
   return (
-    <div className="flex w-full">
+    <div className="relative flex w-full" style={buildThemeStyle(ownerTheme)}>
+      {ownerTheme?.theme_watermark_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={ownerTheme.theme_watermark_url}
+          alt=""
+          className="pointer-events-none fixed bottom-6 left-6 z-40 h-9 w-9 rounded-full object-cover opacity-80 shadow-[var(--shadow)]"
+        />
+      )}
       <aside
         ref={asideRef}
         style={{ width: sidebarWidth }}
