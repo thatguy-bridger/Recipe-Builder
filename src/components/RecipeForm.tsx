@@ -76,6 +76,7 @@ export function RecipeForm({
     initial?.recipe_photos?.sort((a, b) => a.position - b.position).map((p) => p.url) ?? []
   );
   const redirectToRef = useRef<HTMLInputElement>(null);
+  const formElRef = useRef<HTMLFormElement>(null);
   const [categories, setCategories] = useState<string[]>(() =>
     Array.from(
       new Set((initial?.recipe_ingredients ?? []).map((i) => i.category?.trim()).filter(Boolean))
@@ -341,6 +342,11 @@ export function RecipeForm({
         undo();
         return;
       }
+      if (mod && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        formElRef.current?.requestSubmit();
+        return;
+      }
       if (!selected || typing) return;
 
       if (mod && e.key.toLowerCase() === "c") {
@@ -390,6 +396,7 @@ export function RecipeForm({
   return (
     <>
       <form
+        ref={formElRef}
         action={async (formData) => {
           formData.set("ingredients", JSON.stringify(ingredients.filter((i) => i.name.trim())));
           formData.set("steps", JSON.stringify(steps.filter((s) => s.body.trim())));
@@ -576,6 +583,7 @@ export function RecipeForm({
             there. New ingredients start out in Uncategorized. Drag a category&apos;s grip to
             reorder the categories. Click an ingredient or step to select it, then use ⌘/Ctrl+C to
             copy, ⌘/Ctrl+V to paste a duplicate, Delete to remove it, and ⌘/Ctrl+Z to undo.
+            ⌘/Ctrl+S saves from anywhere on the page.
           </p>
 
           <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
@@ -943,6 +951,7 @@ export function RecipeForm({
           <SubmitButton
             pendingLabel={initial ? "Saving…" : "Creating…"}
             className="self-start rounded-full bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:bg-[var(--accent-hover)]"
+            title="⌘/Ctrl+S"
           >
             {initial ? "Save changes" : "Create recipe"}
           </SubmitButton>

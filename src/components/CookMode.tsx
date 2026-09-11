@@ -10,6 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Ingredient, Step } from "@/types/recipe";
 import { ServingScaler } from "./ServingScaler";
 import { StepPhotos } from "./StepPhotos";
@@ -211,6 +212,44 @@ export function CookMode({
     return () => clearInterval(interval);
   }, [subTimer?.running, subTimer?.stepId]);
 
+  const router = useRouter();
+  const goNext = useCallback(
+    () => setCurrent((c) => Math.min(steps.length - 1, c + 1)),
+    [steps.length]
+  );
+  const goPrevious = useCallback(() => setCurrent((c) => Math.max(0, c - 1)), []);
+
+  // Keyboard shortcuts: ←/→ (or p/n) to move between steps, space to
+  // pause/resume the overall timer, Escape to exit Cook Mode. Ignored while
+  // typing in a field (e.g. the servings input) so normal typing still works.
+  useEffect(() => {
+    function isTextField(el: Element | null) {
+      const tag = (el?.tagName || "").toLowerCase();
+      return tag === "input" || tag === "textarea" || tag === "select";
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (isTextField(document.activeElement)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === "ArrowRight" || e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        goNext();
+      } else if (e.key === "ArrowLeft" || e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        goPrevious();
+      } else if (e.key === " ") {
+        e.preventDefault();
+        if (mainTimer.running) pauseMain();
+        else resumeMain();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        router.push(`/recipes/${recipeId}`);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [goNext, goPrevious, mainTimer.running, pauseMain, resumeMain, router, recipeId]);
+
   // Contextual ingredient highlighting: which ingredients does the current
   // step's text mention, so they can be called out both in the step itself
   // and (bigger) in the sidebar list.
@@ -311,6 +350,7 @@ export function CookMode({
             <div>
               <Link
                 href={`/recipes/${recipeId}`}
+                title="Esc"
                 className="text-sm text-[var(--text-muted)] hover:text-[var(--text)]"
               >
                 &larr; Exit cook mode
@@ -340,6 +380,7 @@ export function CookMode({
                   <button
                     type="button"
                     onClick={mainTimer.running ? pauseMain : resumeMain}
+                    title="Space"
                     className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
                   >
                     {mainTimer.running ? "Pause" : "Resume"}
@@ -499,15 +540,17 @@ export function CookMode({
 
       <div className="fixed bottom-6 right-6 z-40 flex gap-2">
         <button
-          onClick={() => setCurrent((c) => Math.max(0, c - 1))}
+          onClick={goPrevious}
           disabled={current === 0}
+          title="← or P"
           className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-5 py-2 text-sm font-medium shadow-[var(--shadow)] disabled:opacity-40"
         >
           Previous
         </button>
         <button
-          onClick={() => setCurrent((c) => Math.min(steps.length - 1, c + 1))}
+          onClick={goNext}
           disabled={current === steps.length - 1}
+          title="→ or N"
           className="rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-medium text-white shadow-[var(--shadow)] hover:bg-[var(--accent-hover)] disabled:opacity-40"
         >
           Next step

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ServingScaler } from "@/components/ServingScaler";
 import { StepPhotos } from "@/components/StepPhotos";
 import { RecipeThemeScope } from "@/components/RecipeThemeScope";
+import { RecipeViewShortcuts } from "@/components/RecipeViewShortcuts";
 import { toEmbedUrl } from "@/lib/video";
 import type { RecipeWithDetails } from "@/types/recipe";
 
@@ -50,13 +51,19 @@ export default async function RecipeDetailPage({
 
   return (
     <RecipeThemeScope profile={recipe.profiles} className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+      <RecipeViewShortcuts recipeId={id} canEdit={canEdit} />
       <div className="mb-2 flex items-center justify-between gap-4">
-        <Link href="/" className="text-sm text-[var(--text-muted)] hover:text-[var(--text)]">
+        <Link
+          href="/"
+          title="Esc"
+          className="text-sm text-[var(--text-muted)] hover:text-[var(--text)]"
+        >
           &larr; Back to recipes
         </Link>
         <div className="flex gap-3">
           <Link
             href={`/recipes/${id}/cook`}
+            title="C"
             className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--accent-hover)]"
           >
             Cook mode
@@ -64,6 +71,7 @@ export default async function RecipeDetailPage({
           {canEdit && (
             <Link
               href={`/recipes/${id}/edit`}
+              title="E"
               className="rounded-full border border-[var(--border)] px-4 py-1.5 text-sm font-medium hover:bg-[var(--bg-muted)]"
             >
               Edit

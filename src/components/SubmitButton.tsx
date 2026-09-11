@@ -15,16 +15,19 @@ export function SubmitButton({
   children,
   pendingLabel,
   className,
+  title,
 }: {
   children: React.ReactNode;
   pendingLabel?: string;
   className?: string;
+  title?: string;
 }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
       disabled={pending}
+      title={title}
       className={`${className ?? ""} inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-70`}
     >
       {pending && <Spinner />}
