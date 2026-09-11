@@ -10,6 +10,7 @@ const RESUME_WINDOW_MS = 5 * 60 * 1000;
 type StoredTimer = {
   recipeId: string;
   recipeTitle: string;
+  totalSeconds: number | null;
   elapsedSeconds: number;
   running: boolean;
   lastActiveAt: number;
@@ -18,6 +19,11 @@ type StoredTimer = {
 type CookTimerState = {
   recipeId: string | null;
   recipeTitle: string | null;
+  // The recipe's total time, in seconds — what the timer counts down from.
+  // null when the recipe has no total time set, in which case there's
+  // nothing to count down from and elapsedSeconds is shown counting up
+  // instead (see remainingSeconds below).
+  totalSeconds: number | null;
   elapsedSeconds: number;
   running: boolean;
 };
@@ -25,13 +31,22 @@ type CookTimerState = {
 const initialState: CookTimerState = {
   recipeId: null,
   recipeTitle: null,
+  totalSeconds: null,
   elapsedSeconds: 0,
   running: false,
 };
 
+// The value to actually display: counting down from totalSeconds when one
+// is known (clamped at 0), otherwise elapsedSeconds counting up as a
+// fallback for recipes with no total time set.
+export function remainingSeconds(timer: CookTimerState): number {
+  if (timer.totalSeconds == null) return timer.elapsedSeconds;
+  return Math.max(0, timer.totalSeconds - timer.elapsedSeconds);
+}
+
 const CookTimerContext = createContext<{
   timer: CookTimerState;
-  startFor: (recipeId: string, recipeTitle: string) => void;
+  startFor: (recipeId: string, recipeTitle: string, totalSeconds: number | null) => void;
   pause: () => void;
   resume: () => void;
   reset: () => void;
@@ -72,6 +87,7 @@ export function CookTimerProvider({ children }: { children: React.ReactNode }) {
       setTimer({
         recipeId: stored.recipeId,
         recipeTitle: stored.recipeTitle,
+        totalSeconds: stored.totalSeconds,
         elapsedSeconds: stored.elapsedSeconds,
         running: stored.running,
       });
@@ -95,6 +111,7 @@ export function CookTimerProvider({ children }: { children: React.ReactNode }) {
           writeStored({
             recipeId: t.recipeId,
             recipeTitle: t.recipeTitle ?? "",
+            totalSeconds: t.totalSeconds,
             elapsedSeconds: nextSeconds,
             running: true,
             lastActiveAt: Date.now(),
@@ -106,21 +123,31 @@ export function CookTimerProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [timer.running, timer.recipeId]);
 
-  const startFor = useCallback((recipeId: string, recipeTitle: string) => {
+  const startFor = useCallback((recipeId: string, recipeTitle: string, totalSeconds: number | null) => {
     const stored = readStored();
     const withinWindow = stored ? Date.now() - stored.lastActiveAt <= RESUME_WINDOW_MS : false;
 
     if (stored && stored.recipeId === recipeId && withinWindow) {
+      // Resume — keep the elapsed progress, but always trust the freshly
+      // passed total in case the recipe's total time was edited since.
       setTimer({
         recipeId: stored.recipeId,
         recipeTitle: stored.recipeTitle,
+        totalSeconds,
         elapsedSeconds: stored.elapsedSeconds,
         running: true,
       });
-      writeStored({ ...stored, running: true, lastActiveAt: Date.now() });
+      writeStored({ ...stored, totalSeconds, running: true, lastActiveAt: Date.now() });
     } else {
-      setTimer({ recipeId, recipeTitle, elapsedSeconds: 0, running: true });
-      writeStored({ recipeId, recipeTitle, elapsedSeconds: 0, running: true, lastActiveAt: Date.now() });
+      setTimer({ recipeId, recipeTitle, totalSeconds, elapsedSeconds: 0, running: true });
+      writeStored({
+        recipeId,
+        recipeTitle,
+        totalSeconds,
+        elapsedSeconds: 0,
+        running: true,
+        lastActiveAt: Date.now(),
+      });
     }
   }, []);
 
@@ -130,6 +157,7 @@ export function CookTimerProvider({ children }: { children: React.ReactNode }) {
       writeStored({
         recipeId: t.recipeId,
         recipeTitle: t.recipeTitle ?? "",
+        totalSeconds: t.totalSeconds,
         elapsedSeconds: t.elapsedSeconds,
         running: false,
         lastActiveAt: Date.now(),
@@ -144,6 +172,7 @@ export function CookTimerProvider({ children }: { children: React.ReactNode }) {
       writeStored({
         recipeId: t.recipeId,
         recipeTitle: t.recipeTitle ?? "",
+        totalSeconds: t.totalSeconds,
         elapsedSeconds: t.elapsedSeconds,
         running: true,
         lastActiveAt: Date.now(),
@@ -158,6 +187,7 @@ export function CookTimerProvider({ children }: { children: React.ReactNode }) {
       writeStored({
         recipeId: t.recipeId,
         recipeTitle: t.recipeTitle ?? "",
+        totalSeconds: t.totalSeconds,
         elapsedSeconds: 0,
         running: true,
         lastActiveAt: Date.now(),

@@ -28,6 +28,7 @@ export default async function CookModePage({
       title={recipe.title}
       baseServings={recipe.servings ?? 1}
       servingUnit={recipe.serving_unit}
+      totalMinutes={recipe.total_minutes}
       ingredients={ingredients}
       equipment={recipe.equipment}
       steps={steps}

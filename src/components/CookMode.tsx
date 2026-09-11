@@ -13,7 +13,7 @@ import Link from "next/link";
 import type { Ingredient, Step } from "@/types/recipe";
 import { ServingScaler } from "./ServingScaler";
 import { StepPhotos } from "./StepPhotos";
-import { useCookTimer } from "./CookTimerProvider";
+import { remainingSeconds, useCookTimer } from "./CookTimerProvider";
 import { formatDuration, parseMinutesText } from "@/lib/duration";
 import { findMentionedIngredients, splitByTerms } from "@/lib/ingredientMatch";
 
@@ -24,6 +24,7 @@ export function CookMode({
   title,
   baseServings,
   servingUnit,
+  totalMinutes,
   ingredients,
   equipment,
   steps,
@@ -32,6 +33,7 @@ export function CookMode({
   title: string;
   baseServings: number;
   servingUnit: string;
+  totalMinutes: string | null;
   ingredients: Ingredient[];
   equipment: string[];
   steps: Step[];
@@ -151,12 +153,19 @@ export function CookMode({
 
   // The overall cook-session timer lives in a global provider (so it can
   // show as a warning badge in the top bar even after leaving this page).
-  // Entering Cook Mode claims/starts it for this recipe.
+  // Entering Cook Mode claims/starts it for this recipe, counting down from
+  // the recipe's total time when one is set.
   const { timer: mainTimer, startFor, pause: pauseMain, resume: resumeMain, reset: resetMain } = useCookTimer();
+  const totalSeconds = totalMinutes ? (() => {
+    const minutes = parseMinutesText(totalMinutes);
+    return minutes != null ? Math.round(minutes * 60) : null;
+  })() : null;
   useEffect(() => {
-    startFor(recipeId, title);
+    startFor(recipeId, title, totalSeconds);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipeId]);
+  }, [recipeId, totalSeconds]);
+  const mainRemaining = remainingSeconds(mainTimer);
+  const mainDone = mainTimer.totalSeconds != null && mainRemaining === 0;
 
   // A separate, page-local countdown for whichever step is current, if that
   // step has an optional timer set. Restarts fresh every time the current
@@ -283,8 +292,10 @@ export function CookMode({
                   Step {current + 1} of {steps.length}
                 </span>
                 <div className="flex items-center gap-1.5 text-sm">
-                  <span className="tabular-nums font-semibold">
-                    {formatDuration(mainTimer.elapsedSeconds)}
+                  <span
+                    className={`tabular-nums font-semibold ${mainDone ? "text-[var(--danger)]" : ""}`}
+                  >
+                    {mainDone ? "Time's up!" : formatDuration(mainRemaining)}
                   </span>
                   <button
                     type="button"
