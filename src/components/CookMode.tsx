@@ -150,6 +150,19 @@ export function CookMode({
   // current step — kept out of the windowed list so they aren't duplicated.
   const pinnedSteps = steps.filter((s) => s.is_pinned);
   const visibleSteps = steps.slice(start, end).filter((s) => !s.is_pinned);
+  // The current step is always full-width, which pushes whichever steps
+  // land right before/after it onto their own row. If only 1 (or, at the
+  // 3-column breakpoint, 2) steps land in that row, they'd sit alone next
+  // to empty grid cells — so those lone neighbors go full-width too instead
+  // of leaving a gap.
+  const currentPosInWindow = visibleSteps.findIndex((s) => steps.indexOf(s) === current);
+  const beforeGroupSize = currentPosInWindow;
+  const afterGroupSize = visibleSteps.length - currentPosInWindow - 1;
+  function orphanSpanClass(groupSize: number): string {
+    if (groupSize === 1) return "col-span-full";
+    if (groupSize === 2) return "lg:col-span-full";
+    return "";
+  }
 
   // The overall cook-session timer lives in a global provider (so it can
   // show as a warning badge in the top bar even after leaving this page).
@@ -370,16 +383,21 @@ export function CookMode({
               </div>
             )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {visibleSteps.map((step) => {
+              {visibleSteps.map((step, posInWindow) => {
                 const idx = steps.indexOf(step);
                 const isCurrent = idx === current;
+                const spanClass = isCurrent
+                  ? "col-span-full"
+                  : posInWindow < currentPosInWindow
+                    ? orphanSpanClass(beforeGroupSize)
+                    : orphanSpanClass(afterGroupSize);
                 return (
                   <div
                     key={step.id}
                     onClick={() => setCurrent(idx)}
-                    className={`cursor-pointer rounded-[var(--radius)] border transition-all ${
+                    className={`cursor-pointer rounded-[var(--radius)] border transition-all ${spanClass} ${
                       isCurrent
-                        ? "col-span-full border-[var(--accent)] bg-[var(--accent-soft)] p-5 shadow-[var(--shadow)]"
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)] p-5 shadow-[var(--shadow)]"
                         : "border-[var(--border)] bg-[var(--bg-elevated)] p-3 opacity-60"
                     }`}
                   >
