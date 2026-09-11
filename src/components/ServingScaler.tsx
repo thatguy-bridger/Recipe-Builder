@@ -73,30 +73,9 @@ export function ServingScaler({
 
   return (
     <div className="flex flex-col gap-4">
-      {hasConvertibleUnits && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-[var(--text-muted)]">Units</span>
-          <div className="flex overflow-hidden rounded-full border border-[var(--border)]">
-            {(["us", "metric"] as const).map((sys) => (
-              <button
-                key={sys}
-                type="button"
-                onClick={() => setUnitSystem(sys)}
-                className={`px-3 py-1 font-serif text-xs uppercase tracking-wide ${
-                  unitSystem === sys
-                    ? "bg-[var(--accent)] text-white"
-                    : "bg-transparent text-[var(--text-muted)]"
-                }`}
-              >
-                {sys === "us" ? "US" : "Metric"}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
       {showServings && (
         <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="font-serif text-base font-medium">Servings</span>
             <input
               type="range"
@@ -113,6 +92,17 @@ export function ServingScaler({
               onChange={(e) => setServings(Math.max(1, Number(e.target.value) || 1))}
               className="w-16 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-base"
             />
+            {hasConvertibleUnits && (
+              <select
+                value={unitSystem}
+                onChange={(e) => setUnitSystem(e.target.value as "us" | "metric")}
+                aria-label="Unit system"
+                className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-sm text-[var(--text-muted)] outline-none focus:border-[var(--accent)]"
+              >
+                <option value="us">US units</option>
+                <option value="metric">Metric</option>
+              </select>
+            )}
           </div>
           <p className="text-sm text-[var(--text-muted)]">
             = {servings} {pluralize(servingUnit, servings)}
