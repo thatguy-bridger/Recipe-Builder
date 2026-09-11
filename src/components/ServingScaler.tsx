@@ -44,7 +44,7 @@ export function ServingScaler({
       ingredients.map((ing) => {
         const amount = ing.amount != null ? ing.amount * factor : null;
         if (amount == null) return { ...ing, amount };
-        const converted = convertQuantity(amount, ing.unit, unitSystem);
+        const converted = convertQuantity(amount, ing.unit, unitSystem, ing.name);
         return { ...ing, amount: converted.amount, unit: converted.unit };
       }),
     [ingredients, factor, unitSystem]

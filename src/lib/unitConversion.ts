@@ -90,6 +90,65 @@ const ALIASES: Record<string, string> = {
   kilogramme: "kg",
 };
 
+// Grams per US cup for common dry/baking ingredients, so converting a
+// volume measurement (cup/tbsp/tsp) to metric can produce the weight a
+// real metric recipe would actually use, instead of an unhelpful ml
+// figure for something nobody measures by volume in grams-using kitchens.
+// Approximate by nature — cooking ingredient density varies by brand,
+// how packed it is, etc. Matched by substring against the ingredient
+// name, longest match first so e.g. "brown sugar" wins over "sugar".
+const DRY_DENSITY_G_PER_CUP: [string, number][] = [
+  ["powdered sugar", 120],
+  ["confectioners sugar", 120],
+  ["brown sugar", 220],
+  ["granulated sugar", 200],
+  ["sugar", 200],
+  ["all-purpose flour", 120],
+  ["bread flour", 127],
+  ["cake flour", 114],
+  ["whole wheat flour", 120],
+  ["flour", 120],
+  ["cocoa powder", 85],
+  ["baking soda", 220],
+  ["baking powder", 220],
+  ["salt", 273],
+  ["rice krispies", 30],
+  ["cereal", 40],
+  ["rolled oats", 90],
+  ["oats", 90],
+  ["mini marshmallow", 50],
+  ["marshmallow", 50],
+  ["chocolate chips", 170],
+  ["shredded cheese", 110],
+  ["parmesan", 100],
+  ["breadcrumbs", 108],
+  ["panko", 60],
+  ["chopped nuts", 120],
+  ["walnuts", 100],
+  ["pecans", 100],
+  ["almonds", 140],
+  ["butter", 227],
+  ["cream cheese", 232],
+  ["rice", 185],
+  ["shredded coconut", 80],
+];
+
+// Ingredients that are clearly liquid always stay in ml when converting
+// to metric, even though many of them also have a well-known density —
+// nobody weighs a cup of milk in grams.
+const LIQUID_KEYWORDS = [
+  "water", "milk", "cream", "broth", "stock", "juice", "oil", "wine",
+  "vinegar", "buttermilk", "syrup",
+];
+
+function dryDensityGramsPerCup(ingredientName: string | undefined): number | null {
+  if (!ingredientName) return null;
+  const lower = ingredientName.toLowerCase();
+  if (LIQUID_KEYWORDS.some((kw) => lower.includes(kw))) return null;
+  const match = DRY_DENSITY_G_PER_CUP.find(([kw]) => lower.includes(kw));
+  return match ? match[1] : null;
+}
+
 function resolveUnitKey(unit: string): string | undefined {
   const trimmed = unit.trim().replace(/\.$/, "");
   if (trimmed in CASE_SENSITIVE_ALIASES) return CASE_SENSITIVE_ALIASES[trimmed];
@@ -112,10 +171,18 @@ export function isConvertibleUnit(unit: string | null | undefined): boolean {
 // metric) — never a bigger or smaller one, no matter the magnitude.
 // Returns the original amount/unit unchanged if the unit isn't one we
 // recognize, or if it's already in the target system.
+//
+// When converting a US *volume* measurement to metric, a real metric
+// recipe almost always gives dry ingredients (flour, sugar, marshmallows,
+// ...) by weight in grams, not by milliliters — nobody measures a cup of
+// flour in ml. If `ingredientName` matches a known dry ingredient, this
+// converts to grams using its approximate density instead. Liquids (milk,
+// water, oil, ...) and anything unrecognized still convert to ml.
 export function convertQuantity(
   amount: number,
   unit: string | null,
-  targetSystem: System
+  targetSystem: System,
+  ingredientName?: string
 ): { amount: number; unit: string | null } {
   const key = unit ? resolveUnitKey(unit) : undefined;
   const info = key ? UNITS[key] : undefined;
@@ -125,6 +192,14 @@ export function convertQuantity(
   // judgment — e.g. rewriting "5 cups" of marshmallows as "1 1/4 quart",
   // which is a technically-equal but unnatural way to measure them.
   if (info.system === targetSystem) return { amount, unit };
+
+  if (targetSystem === "metric" && info.kind === "volume") {
+    const gramsPerCup = dryDensityGramsPerCup(ingredientName);
+    if (gramsPerCup != null) {
+      const cups = (amount * info.toBase) / UNITS.cup.toBase;
+      return { amount: cups * gramsPerCup, unit: "g" };
+    }
+  }
 
   const baseAmount = amount * info.toBase;
   const targetUnit = DISPLAY_UNIT[targetSystem][info.kind];

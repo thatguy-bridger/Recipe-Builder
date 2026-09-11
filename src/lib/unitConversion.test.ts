@@ -74,4 +74,43 @@ describe("convertQuantity", () => {
   it("leaves unrecognized units unchanged", () => {
     expect(convertQuantity(3, "clove", "metric")).toEqual({ amount: 3, unit: "clove" });
   });
+
+  describe("dry ingredients convert to grams instead of ml", () => {
+    it("converts a known dry ingredient by weight, not volume", () => {
+      const result = convertQuantity(5, "cup", "metric", "Mini Marshmallows");
+      expect(result.unit).toBe("g");
+      expect(result.amount).toBeCloseTo(250, 0); // 5 cups * 50g/cup
+    });
+
+    it("picks the more specific density match over a generic one", () => {
+      const brown = convertQuantity(1, "cup", "metric", "Brown Sugar");
+      expect(brown.amount).toBeCloseTo(220, 0);
+      const white = convertQuantity(1, "cup", "metric", "Granulated Sugar");
+      expect(white.amount).toBeCloseTo(200, 0);
+    });
+
+    it("still converts to ml for a liquid, even one with a matching density keyword", () => {
+      // "milk" isn't in the dry table, but this also checks that a name
+      // containing a liquid keyword is never treated as dry.
+      const result = convertQuantity(1, "cup", "metric", "Whole Milk");
+      expect(result.unit).toBe("ml");
+      expect(result.amount).toBeCloseTo(236.588, 1);
+    });
+
+    it("falls back to ml for an unrecognized ingredient name", () => {
+      const result = convertQuantity(1, "cup", "metric", "Freeze-Dried Dragon Fruit");
+      expect(result.unit).toBe("ml");
+    });
+
+    it("falls back to ml when no ingredient name is given", () => {
+      const result = convertQuantity(1, "cup", "metric");
+      expect(result.unit).toBe("ml");
+    });
+
+    it("still converts weight units (oz/lb) to grams normally, independent of density", () => {
+      const result = convertQuantity(1, "lb", "metric", "Butter");
+      expect(result.unit).toBe("g");
+      expect(result.amount).toBeCloseTo(453.592, 1);
+    });
+  });
 });
