@@ -8,6 +8,29 @@ describe("isConvertibleUnit", () => {
     expect(isConvertibleUnit("g")).toBe(true);
   });
 
+  it("recognizes a wide range of spellings, abbreviations, and plurals for the same unit", () => {
+    for (const spelling of ["cup", "Cup", "cups", "Cups", "C", "c", "cup.", "Cup."]) {
+      expect(isConvertibleUnit(spelling)).toBe(true);
+    }
+    for (const spelling of ["tbsp", "Tbsp", "tbsps", "tbs", "tblsp", "tablespoon", "Tablespoons"]) {
+      expect(isConvertibleUnit(spelling)).toBe(true);
+    }
+    for (const spelling of ["tsp", "tsps", "teaspoon", "Teaspoons", "tspn"]) {
+      expect(isConvertibleUnit(spelling)).toBe(true);
+    }
+    for (const spelling of ["g", "G", "gram", "grams", "Grams", "gramme", "grammes"]) {
+      expect(isConvertibleUnit(spelling)).toBe(true);
+    }
+    for (const spelling of ["ml", "mL", "milliliter", "milliliters", "millilitre", "cc"]) {
+      expect(isConvertibleUnit(spelling)).toBe(true);
+    }
+  });
+
+  it("distinguishes T (tablespoon) from t (teaspoon) by case", () => {
+    expect(convertQuantity(1, "T", "metric")).toEqual(convertQuantity(1, "tbsp", "metric"));
+    expect(convertQuantity(1, "t", "metric")).toEqual(convertQuantity(1, "tsp", "metric"));
+  });
+
   it("rejects counts and unknown units", () => {
     expect(isConvertibleUnit("clove")).toBe(false);
     expect(isConvertibleUnit(null)).toBe(false);
@@ -28,10 +51,16 @@ describe("convertQuantity", () => {
     expect(result.amount).toBeCloseTo(3.5274, 3);
   });
 
-  it("picks the larger display unit once a cross-system conversion reaches it", () => {
-    const result = convertQuantity(5, "lb", "metric");
-    expect(result.unit).toBe("kg");
-    expect(result.amount).toBeCloseTo(2.268, 2);
+  it("never bumps to a bigger or smaller unit, no matter the magnitude", () => {
+    // 200 cups converts to a lot of ml, but it's still ml — never "l".
+    const big = convertQuantity(200, "cup", "metric");
+    expect(big.unit).toBe("ml");
+    expect(big.amount).toBeCloseTo(47317.6, 0);
+
+    // And a tiny amount doesn't get bumped down to a smaller unit either.
+    const small = convertQuantity(0.5, "tsp", "metric");
+    expect(small.unit).toBe("ml");
+    expect(small.amount).toBeCloseTo(2.464, 2);
   });
 
   it("leaves an already-matching-system unit exactly as authored, even a large amount", () => {

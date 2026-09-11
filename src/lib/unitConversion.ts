@@ -13,78 +13,111 @@ type UnitInfo = {
   toBase: number;
 };
 
+// Canonical units only — every other spelling/abbreviation/plural is
+// resolved down to one of these keys by resolveUnitKey() below.
 const UNITS: Record<string, UnitInfo> = {
   tsp: { system: "us", kind: "volume", toBase: 4.92892 },
-  teaspoon: { system: "us", kind: "volume", toBase: 4.92892 },
   tbsp: { system: "us", kind: "volume", toBase: 14.7868 },
-  tablespoon: { system: "us", kind: "volume", toBase: 14.7868 },
   cup: { system: "us", kind: "volume", toBase: 236.588 },
   "fl oz": { system: "us", kind: "volume", toBase: 29.5735 },
   pint: { system: "us", kind: "volume", toBase: 473.176 },
   quart: { system: "us", kind: "volume", toBase: 946.353 },
   gallon: { system: "us", kind: "volume", toBase: 3785.41 },
   oz: { system: "us", kind: "weight", toBase: 28.3495 },
-  ounce: { system: "us", kind: "weight", toBase: 28.3495 },
   lb: { system: "us", kind: "weight", toBase: 453.592 },
-  pound: { system: "us", kind: "weight", toBase: 453.592 },
   ml: { system: "metric", kind: "volume", toBase: 1 },
-  milliliter: { system: "metric", kind: "volume", toBase: 1 },
   l: { system: "metric", kind: "volume", toBase: 1000 },
-  liter: { system: "metric", kind: "volume", toBase: 1000 },
   g: { system: "metric", kind: "weight", toBase: 1 },
-  gram: { system: "metric", kind: "weight", toBase: 1 },
   kg: { system: "metric", kind: "weight", toBase: 1000 },
-  kilogram: { system: "metric", kind: "weight", toBase: 1000 },
 };
 
-// Preferred display unit for each (kind, system) pair, in ascending order —
-// pick the largest one where the amount is still >= 1, so 750ml doesn't
-// render as "0.75 l".
-const DISPLAY_UNITS: Record<System, Record<"volume" | "weight", { unit: string; toBase: number }[]>> = {
-  us: {
-    volume: [
-      { unit: "tsp", toBase: UNITS.tsp.toBase },
-      { unit: "tbsp", toBase: UNITS.tbsp.toBase },
-      { unit: "cup", toBase: UNITS.cup.toBase },
-      { unit: "quart", toBase: UNITS.quart.toBase },
-      { unit: "gallon", toBase: UNITS.gallon.toBase },
-    ],
-    weight: [
-      { unit: "oz", toBase: UNITS.oz.toBase },
-      { unit: "lb", toBase: UNITS.lb.toBase },
-    ],
-  },
-  metric: {
-    volume: [
-      { unit: "ml", toBase: UNITS.ml.toBase },
-      { unit: "l", toBase: UNITS.l.toBase },
-    ],
-    weight: [
-      { unit: "g", toBase: UNITS.g.toBase },
-      { unit: "kg", toBase: UNITS.kg.toBase },
-    ],
-  },
+// One fixed display unit per (system, kind) — always the same unit no
+// matter how large or small the amount ends up. Converting never bumps to
+// a bigger or smaller unit (200 cups stays "200 cup", never "12.5
+// gallon"); only the number changes.
+const DISPLAY_UNIT: Record<System, Record<"volume" | "weight", string>> = {
+  us: { volume: "cup", weight: "oz" },
+  metric: { volume: "ml", weight: "g" },
 };
 
-function normalizeUnit(unit: string): string {
-  return unit.trim().toLowerCase().replace(/\.$/, "").replace(/s$/, "");
+// Case-sensitive first: "T" and "t" are the one genuine ambiguity in
+// cooking abbreviations (tablespoon vs. teaspoon), so they must be checked
+// before anything gets lowercased.
+const CASE_SENSITIVE_ALIASES: Record<string, string> = {
+  T: "tbsp",
+  t: "tsp",
+};
+
+// Every other spelling/abbreviation/plural we accept, case-insensitively
+// (and after stripping a trailing period and a trailing "s"). Keys here
+// are already run through that same normalization, so e.g. "Cups" and
+// "cup." and "C" all resolve the same way.
+const ALIASES: Record<string, string> = {
+  tsp: "tsp",
+  teaspoon: "tsp",
+  tspn: "tsp",
+  tbsp: "tbsp",
+  tbs: "tbsp",
+  tblsp: "tbsp",
+  tablespoon: "tbsp",
+  cup: "cup",
+  c: "cup",
+  "fl oz": "fl oz",
+  floz: "fl oz",
+  "fluid ounce": "fl oz",
+  pint: "pint",
+  pt: "pint",
+  quart: "quart",
+  qt: "quart",
+  gallon: "gallon",
+  gal: "gallon",
+  oz: "oz",
+  ounce: "oz",
+  lb: "lb",
+  pound: "lb",
+  ml: "ml",
+  milliliter: "ml",
+  millilitre: "ml",
+  cc: "ml",
+  l: "l",
+  liter: "l",
+  litre: "l",
+  g: "g",
+  gram: "g",
+  gramme: "g",
+  kg: "kg",
+  kilogram: "kg",
+  kilogramme: "kg",
+};
+
+function resolveUnitKey(unit: string): string | undefined {
+  const trimmed = unit.trim().replace(/\.$/, "");
+  if (trimmed in CASE_SENSITIVE_ALIASES) return CASE_SENSITIVE_ALIASES[trimmed];
+
+  // Try the exact (lowercased) spelling first — some abbreviations
+  // genuinely end in "s" (tbs, oz doesn't but cc/tbs do), so only fall
+  // back to stripping a trailing "s" (for plurals like "cups") once the
+  // unstripped spelling doesn't match anything.
+  const normalized = trimmed.toLowerCase();
+  return ALIASES[normalized] ?? ALIASES[normalized.replace(/s$/, "")];
 }
 
 export function isConvertibleUnit(unit: string | null | undefined): boolean {
   if (!unit) return false;
-  return normalizeUnit(unit) in UNITS;
+  return resolveUnitKey(unit) != null;
 }
 
-// Converts an amount+unit into the equivalent in the target system, picking
-// a sensible display unit (e.g. 3 tbsp -> not 0.19 cup, stays as tbsp;
-// 500g -> stays g, 1500g -> 1.5 kg). Returns the original amount/unit
-// unchanged if the unit isn't one we recognize.
+// Converts an amount+unit into the equivalent in the target system, always
+// using that system's one fixed unit per kind (cup/oz for US, ml/g for
+// metric) — never a bigger or smaller one, no matter the magnitude.
+// Returns the original amount/unit unchanged if the unit isn't one we
+// recognize, or if it's already in the target system.
 export function convertQuantity(
   amount: number,
   unit: string | null,
   targetSystem: System
 ): { amount: number; unit: string | null } {
-  const key = unit ? normalizeUnit(unit) : null;
+  const key = unit ? resolveUnitKey(unit) : undefined;
   const info = key ? UNITS[key] : undefined;
   if (!info) return { amount, unit };
   // Already in the target system: leave it exactly as the recipe author
@@ -94,10 +127,6 @@ export function convertQuantity(
   if (info.system === targetSystem) return { amount, unit };
 
   const baseAmount = amount * info.toBase;
-  const candidates = DISPLAY_UNITS[targetSystem][info.kind];
-  let best = candidates[0];
-  for (const candidate of candidates) {
-    if (baseAmount / candidate.toBase >= 1) best = candidate;
-  }
-  return { amount: baseAmount / best.toBase, unit: best.unit };
+  const targetUnit = DISPLAY_UNIT[targetSystem][info.kind];
+  return { amount: baseAmount / UNITS[targetUnit].toBase, unit: targetUnit };
 }
