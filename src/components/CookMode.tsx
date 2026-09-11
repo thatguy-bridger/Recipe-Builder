@@ -363,9 +363,9 @@ export function CookMode({
         className="sticky top-[57px] h-[calc(100vh-57px)] w-2.5 shrink-0 touch-none cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)]"
       />
 
-      <section className="flex flex-1 flex-col p-8 pb-24">
-        <div className="flex w-full flex-1 flex-col gap-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+      <section className="flex h-[calc(100vh-57px)] flex-1 flex-col overflow-hidden p-8 pb-24">
+        <div className="flex w-full flex-1 flex-col gap-8 overflow-hidden">
+          <div className="flex shrink-0 flex-wrap items-start justify-between gap-4">
             <div>
               <Link
                 href={`/recipes/${recipeId}`}
@@ -431,7 +431,7 @@ export function CookMode({
             </div>
           </div>
 
-          <div className="flex flex-1 flex-col gap-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
             {pinnedSteps.length > 0 && (
               <div className="flex flex-col gap-3">
                 {pinnedSteps.map((step) => {
@@ -506,8 +506,8 @@ export function CookMode({
                     </div>
                     <StepPhotos
                       urls={step.photo_urls}
-                      singleMaxHeightClass={isCurrent ? "max-h-[420px]" : "max-h-28"}
-                      multiMaxHeightClass={isCurrent ? "max-h-52" : "max-h-20"}
+                      singleMaxHeightClass={isCurrent ? "max-h-[38vh]" : "max-h-28"}
+                      multiMaxHeightClass={isCurrent ? "max-h-[20vh]" : "max-h-20"}
                     />
                     {isCurrent && subTimer && (
                       <div
