@@ -7,15 +7,28 @@ import { PhotoPicker } from "./PhotoPicker";
 import { SubmitButton } from "./SubmitButton";
 
 type IngredientRow = { amount: string; unit: string; name: string; category: string; note: string };
-type StepRow = { body: string; photo_url: string; is_pinned: boolean };
+type StepRow = { body: string; photo_urls: string[]; is_pinned: boolean; timer_minutes: string };
 type DragKind = "ingredient" | "step" | "category";
 type DragState = { kind: DragKind; index: number; x: number; y: number; label: string };
 type Selection = { type: "ingredient" | "step"; index: number };
 type HistoryEntry = { ingredients: IngredientRow[]; steps: StepRow[] };
-type ImageSlot = { type: "recipe"; index: number } | { type: "step"; index: number } | { type: "recipe-new" };
+type ImageSlot =
+  | { type: "recipe"; index: number }
+  | { type: "recipe-new" }
+  | { type: "step"; stepIndex: number; photoIndex: number }
+  | { type: "step-new"; stepIndex: number };
 
 function imageSlotKey(slot: ImageSlot): string {
-  return slot.type === "recipe-new" ? "recipe-new" : `${slot.type}:${slot.index}`;
+  switch (slot.type) {
+    case "recipe-new":
+      return "recipe-new";
+    case "recipe":
+      return `recipe:${slot.index}`;
+    case "step-new":
+      return `step-new:${slot.stepIndex}`;
+    case "step":
+      return `step:${slot.stepIndex}:${slot.photoIndex}`;
+  }
 }
 
 function GripIcon() {
@@ -52,13 +65,17 @@ export function RecipeForm({
   const [steps, setSteps] = useState<StepRow[]>(
     initial?.recipe_steps
       ?.sort((a, b) => a.position - b.position)
-      .map((s) => ({ body: s.body, photo_url: s.photo_url ?? "", is_pinned: s.is_pinned })) ?? [
-      { body: "", photo_url: "", is_pinned: false },
-    ]
+      .map((s) => ({
+        body: s.body,
+        photo_urls: s.photo_urls ?? [],
+        is_pinned: s.is_pinned,
+        timer_minutes: s.timer_minutes ?? "",
+      })) ?? [{ body: "", photo_urls: [], is_pinned: false, timer_minutes: "" }]
   );
   const [photoUrls, setPhotoUrls] = useState<string[]>(
     initial?.recipe_photos?.sort((a, b) => a.position - b.position).map((p) => p.url) ?? []
   );
+  const redirectToRef = useRef<HTMLInputElement>(null);
   const [categories, setCategories] = useState<string[]>(() =>
     Array.from(
       new Set((initial?.recipe_ingredients ?? []).map((i) => i.category?.trim()).filter(Boolean))
@@ -83,12 +100,12 @@ export function RecipeForm({
 
   function getImageSlotUrl(slot: ImageSlot): string {
     if (slot.type === "recipe") return photoUrls[slot.index] ?? "";
-    if (slot.type === "step") return steps[slot.index]?.photo_url ?? "";
+    if (slot.type === "step") return steps[slot.stepIndex]?.photo_urls[slot.photoIndex] ?? "";
     return "";
   }
 
   function moveImage(source: ImageSlot, target: ImageSlot) {
-    if (source.type === "recipe-new") return;
+    if (source.type === "recipe-new" || source.type === "step-new") return;
     const sourceUrl = getImageSlotUrl(source);
     if (!sourceUrl) return;
     if (imageSlotKey(source) === imageSlotKey(target)) return;
@@ -98,8 +115,23 @@ export function RecipeForm({
       setPhotoUrls((urls) => [...urls, sourceUrl]);
     } else if (target.type === "recipe") {
       setPhotoUrls((urls) => urls.map((u, idx) => (idx === target.index ? sourceUrl : u)));
+    } else if (target.type === "step-new") {
+      setSteps((rows) =>
+        rows.map((r, idx) =>
+          idx === target.stepIndex ? { ...r, photo_urls: [...r.photo_urls, sourceUrl] } : r
+        )
+      );
     } else {
-      setSteps((rows) => rows.map((r, idx) => (idx === target.index ? { ...r, photo_url: sourceUrl } : r)));
+      setSteps((rows) =>
+        rows.map((r, idx) =>
+          idx === target.stepIndex
+            ? {
+                ...r,
+                photo_urls: r.photo_urls.map((u, pi) => (pi === target.photoIndex ? sourceUrl : u)),
+              }
+            : r
+        )
+      );
     }
 
     if (source.type === "recipe") {
@@ -109,7 +141,26 @@ export function RecipeForm({
         setPhotoUrls((urls) => urls.filter((_, idx) => idx !== source.index));
       }
     } else {
-      setSteps((rows) => rows.map((r, idx) => (idx === source.index ? { ...r, photo_url: targetUrl } : r)));
+      if (targetUrl) {
+        setSteps((rows) =>
+          rows.map((r, idx) =>
+            idx === source.stepIndex
+              ? {
+                  ...r,
+                  photo_urls: r.photo_urls.map((u, pi) => (pi === source.photoIndex ? targetUrl : u)),
+                }
+              : r
+          )
+        );
+      } else {
+        setSteps((rows) =>
+          rows.map((r, idx) =>
+            idx === source.stepIndex
+              ? { ...r, photo_urls: r.photo_urls.filter((_, pi) => pi !== source.photoIndex) }
+              : r
+          )
+        );
+      }
     }
   }
 
@@ -388,7 +439,7 @@ export function RecipeForm({
               />
             </label>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <label className="flex flex-col gap-1 text-sm">
               Prep time
               <input
@@ -404,6 +455,15 @@ export function RecipeForm({
                 name="cook_minutes"
                 placeholder="e.g. 15 or 10-12 min"
                 defaultValue={initial?.cook_minutes ?? ""}
+                className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 outline-none focus:border-[var(--accent)]"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Total time
+              <input
+                name="total_minutes"
+                placeholder="e.g. 45 or 40-50 min"
+                defaultValue={initial?.total_minutes ?? ""}
                 className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 outline-none focus:border-[var(--accent)]"
               />
             </label>
@@ -740,51 +800,98 @@ export function RecipeForm({
                     placeholder="Describe this step..."
                     className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm"
                   />
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div
-                      {...imageDragHandlers({ type: "step", index: i }, Boolean(step.photo_url))}
-                      className={`h-12 w-12 rounded-lg transition-shadow ${
-                        imageDragOverKey === `step:${i}` ? "ring-2 ring-[var(--accent)]" : ""
-                      } ${
-                        draggingImage && imageSlotKey(draggingImage) === `step:${i}`
-                          ? "opacity-40"
-                          : ""
-                      } ${
-                        step.photo_url
-                          ? draggingImage
-                            ? "cursor-grabbing"
-                            : "cursor-grab"
-                          : draggingImage
-                            ? "border border-dashed border-[var(--border)]"
-                            : ""
-                      }`}
-                    >
-                      {step.photo_url && (
-                        <EditableImage
-                          src={step.photo_url}
-                          aspect={1}
-                          className="h-12 w-12"
-                          onChange={(newUrl) =>
-                            setSteps((rows) =>
-                              rows.map((r, idx) => (idx === i ? { ...r, photo_url: newUrl } : r))
-                            )
-                          }
-                        />
-                      )}
-                    </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {step.photo_urls.map((url, pi) => {
+                      const slot: ImageSlot = { type: "step", stepIndex: i, photoIndex: pi };
+                      const key = imageSlotKey(slot);
+                      return (
+                        <div
+                          key={pi}
+                          {...imageDragHandlers(slot, true)}
+                          className={`relative h-12 w-12 rounded-lg transition-shadow ${
+                            imageDragOverKey === key ? "ring-2 ring-[var(--accent)]" : ""
+                          } ${draggingImage && imageSlotKey(draggingImage) === key ? "opacity-40" : ""} ${
+                            draggingImage ? "cursor-grabbing" : "cursor-grab"
+                          }`}
+                        >
+                          <EditableImage
+                            src={url}
+                            aspect={1}
+                            className="h-12 w-12"
+                            onChange={(newUrl) =>
+                              setSteps((rows) =>
+                                rows.map((r, idx) =>
+                                  idx === i
+                                    ? {
+                                        ...r,
+                                        photo_urls: r.photo_urls.map((u, pidx) =>
+                                          pidx === pi ? newUrl : u
+                                        ),
+                                      }
+                                    : r
+                                )
+                              )
+                            }
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSteps((rows) =>
+                                rows.map((r, idx) =>
+                                  idx === i
+                                    ? { ...r, photo_urls: r.photo_urls.filter((_, pidx) => pidx !== pi) }
+                                    : r
+                                )
+                              )
+                            }
+                            aria-label="Remove photo"
+                            className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--danger)] text-[10px] text-white"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
                     <PhotoPicker
                       aspect={1}
                       outputWidth={800}
+                      multiple
                       onAdd={(url) =>
                         setSteps((rows) =>
-                          rows.map((r, idx) => (idx === i ? { ...r, photo_url: url } : r))
+                          rows.map((r, idx) =>
+                            idx === i ? { ...r, photo_urls: [...r.photo_urls, url] } : r
+                          )
                         )
                       }
                     >
-                      <span className="text-xs text-[var(--accent)] hover:underline">
-                        {step.photo_url ? "Replace photo" : "+ Add photo"}
-                      </span>
+                      <div
+                        {...imageDragHandlers({ type: "step-new", stepIndex: i }, false)}
+                        className={`flex h-12 w-12 items-center justify-center rounded-lg border border-dashed text-xs transition-colors ${
+                          imageDragOverKey === `step-new:${i}`
+                            ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                            : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                        }`}
+                      >
+                        +
+                      </div>
                     </PhotoPicker>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                      Timer
+                      <input
+                        value={step.timer_minutes}
+                        onChange={(e) =>
+                          setSteps((rows) =>
+                            rows.map((r, idx) =>
+                              idx === i ? { ...r, timer_minutes: e.target.value } : r
+                            )
+                          )
+                        }
+                        placeholder="e.g. 10 min"
+                        className="w-24 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-xs"
+                      />
+                    </label>
                     <button
                       type="button"
                       onClick={() =>
@@ -820,7 +927,10 @@ export function RecipeForm({
             type="button"
             onClick={() => {
               pushUndo();
-              setSteps((rows) => [...rows, { body: "", photo_url: "", is_pinned: false }]);
+              setSteps((rows) => [
+                ...rows,
+                { body: "", photo_urls: [], is_pinned: false, timer_minutes: "" },
+              ]);
             }}
             className="mt-3 text-sm text-[var(--accent)] hover:underline"
           >
@@ -828,12 +938,30 @@ export function RecipeForm({
           </button>
         </section>
 
-        <SubmitButton
-          pendingLabel={initial ? "Saving…" : "Creating…"}
-          className="self-start rounded-full bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:bg-[var(--accent-hover)]"
-        >
-          {initial ? "Save changes" : "Create recipe"}
-        </SubmitButton>
+        <input ref={redirectToRef} type="hidden" name="redirect_to" />
+        <div className="flex items-center gap-2">
+          <SubmitButton
+            pendingLabel={initial ? "Saving…" : "Creating…"}
+            className="self-start rounded-full bg-[var(--accent)] px-6 py-2.5 text-sm font-medium text-white hover:bg-[var(--accent-hover)]"
+          >
+            {initial ? "Save changes" : "Create recipe"}
+          </SubmitButton>
+          {initial && (
+            <button
+              type="submit"
+              onClick={() => {
+                if (redirectToRef.current) {
+                  redirectToRef.current.value = `/recipes/${initial.id}/cook`;
+                }
+              }}
+              aria-label="Save and start cooking"
+              title="Save and start cooking"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] text-lg hover:bg-[var(--bg-muted)]"
+            >
+              🍳
+            </button>
+          )}
+        </div>
       </form>
 
       {drag && (

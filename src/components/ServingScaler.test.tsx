@@ -44,17 +44,16 @@ describe("ServingScaler", () => {
     expect(screen.getByText(/2 cup/)).toBeInTheDocument();
   });
 
-  it("renders a name with no amount without an orphaned bullet on its own line", () => {
-    // Regression test: the ingredient <li> must not use flex-wrap, otherwise
-    // the bullet (a ::before pseudo-element) wraps onto its own line above
-    // the name for ingredients with an empty amount.
+  it("renders a name with no amount without a stray leading space", () => {
+    // The quantity and name are one continuous inline phrase (the quantity
+    // just happens to be colored), not separately positioned elements — so
+    // when there's no amount, nothing should render before the name at all.
     const ingredients = [ing({ name: "Orange Zest", amount: null, unit: null })];
     const { container } = render(
       <ServingScaler baseServings={4} ingredients={ingredients} showServings={false} />
     );
     const li = container.querySelector("li");
     expect(li).not.toBeNull();
-    expect(li?.className).not.toContain("flex-wrap");
-    expect(li?.className).toContain("before:shrink-0");
+    expect(li?.textContent?.trim()).toBe("Orange Zest");
   });
 });

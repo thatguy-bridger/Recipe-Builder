@@ -15,11 +15,15 @@ export function ServingScaler({
   servingUnit = "Serving",
   ingredients,
   showServings = true,
+  highlightedIds,
 }: {
   baseServings: number;
   servingUnit?: string;
   ingredients: Ingredient[];
   showServings?: boolean;
+  // Ingredient ids to visually call out — e.g. ones mentioned in the
+  // current Cook Mode step — rendered bigger and highlighted.
+  highlightedIds?: Set<string>;
 }) {
   const [servings, setServings] = useState(baseServings || 1);
   const factor = servings / (baseServings || 1);
@@ -93,24 +97,30 @@ export function ServingScaler({
               </h3>
             )}
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] items-start gap-x-6 gap-y-2">
-              {items.map((ing) => (
-                <li
-                  key={ing.id}
-                  className="flex min-w-0 items-baseline gap-2 text-base before:mr-1 before:shrink-0 before:text-[var(--text-muted)] before:content-['·']"
-                >
-                  <span className="shrink-0 font-medium text-[var(--accent)]">
-                    {formatIngredientQuantity(ing)}
-                  </span>
-                  <span className="min-w-0 break-words">
+              {items.map((ing) => {
+                const quantity = formatIngredientQuantity(ing);
+                const isHighlighted = highlightedIds?.has(ing.id);
+                return (
+                  <li
+                    key={ing.id}
+                    className={`min-w-0 break-words rounded transition-all before:mr-1 before:text-[var(--text-muted)] before:content-['·'] ${
+                      isHighlighted
+                        ? "-mx-1.5 bg-[var(--accent-soft)] px-1.5 py-0.5 text-lg font-medium"
+                        : "text-base"
+                    }`}
+                  >
+                    {quantity && (
+                      <span className="font-medium text-[var(--accent)]">{quantity} </span>
+                    )}
                     {ing.name}
                     {ing.note && (
-                      <span className="block break-words text-xs text-[var(--text-muted)]">
+                      <span className="block break-words text-xs font-normal text-[var(--text-muted)]">
                         {ing.note}
                       </span>
                     )}
-                  </span>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ))}

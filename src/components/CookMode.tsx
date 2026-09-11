@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import type { Ingredient, Step } from "@/types/recipe";
 import { ServingScaler } from "./ServingScaler";
+import { StepPhotos } from "./StepPhotos";
 
 export function CookMode({
   recipeId,
@@ -261,20 +262,17 @@ export function CookMode({
                         </span>
                         <p className="text-sm leading-relaxed">{step.body}</p>
                       </div>
-                      {step.photo_url && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={step.photo_url}
-                          alt=""
-                          className="mt-3 max-h-28 w-full rounded-lg object-cover"
-                        />
-                      )}
+                      <StepPhotos
+                        urls={step.photo_urls}
+                        singleMaxHeightClass="max-h-28"
+                        multiMaxHeightClass="max-h-20"
+                      />
                     </div>
                   );
                 })}
               </div>
             )}
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] items-start gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {visibleSteps.map((step) => {
                 const idx = steps.indexOf(step);
                 const isCurrent = idx === current;
@@ -302,16 +300,11 @@ export function CookMode({
                         {step.body}
                       </p>
                     </div>
-                    {step.photo_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={step.photo_url}
-                        alt=""
-                        className={`mt-3 w-full rounded-lg object-cover ${
-                          isCurrent ? "max-h-64" : "max-h-28"
-                        }`}
-                      />
-                    )}
+                    <StepPhotos
+                      urls={step.photo_urls}
+                      singleMaxHeightClass={isCurrent ? "max-h-[420px]" : "max-h-28"}
+                      multiMaxHeightClass={isCurrent ? "max-h-52" : "max-h-20"}
+                    />
                   </div>
                 );
               })}

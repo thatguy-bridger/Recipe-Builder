@@ -22,8 +22,9 @@ export type Step = {
   recipe_id: string;
   position: number;
   body: string;
-  photo_url: string | null;
+  photo_urls: string[];
   is_pinned: boolean;
+  timer_minutes: string | null;
 };
 
 export type Photo = {
@@ -42,6 +43,7 @@ export type Recipe = {
   serving_unit: string;
   prep_minutes: string | null;
   cook_minutes: string | null;
+  total_minutes: string | null;
   tags: string[];
   equipment: string[];
   video_url: string | null;

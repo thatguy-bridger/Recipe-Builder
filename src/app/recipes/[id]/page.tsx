@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ServingScaler } from "@/components/ServingScaler";
+import { StepPhotos } from "@/components/StepPhotos";
 import { toEmbedUrl } from "@/lib/video";
 import type { RecipeWithDetails } from "@/types/recipe";
 
@@ -70,6 +71,7 @@ export default async function RecipeDetailPage({
       <div className="mt-4 flex flex-wrap gap-4 text-sm text-[var(--text-muted)]">
         {recipe.prep_minutes != null && <span>Prep: {recipe.prep_minutes} min</span>}
         {recipe.cook_minutes != null && <span>Cook: {recipe.cook_minutes} min</span>}
+        {recipe.total_minutes != null && <span>Total: {recipe.total_minutes} min</span>}
         {recipe.profiles?.display_name && <span>By {recipe.profiles.display_name}</span>}
       </div>
 
@@ -139,7 +141,7 @@ export default async function RecipeDetailPage({
 
       <section className="mt-10">
         <h2 className="font-serif text-xl font-semibold">Steps</h2>
-        <ol className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] items-start gap-4">
+        <ol className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {steps.map((step, i) => (
             <li
               key={step.id}
@@ -150,10 +152,7 @@ export default async function RecipeDetailPage({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="leading-relaxed">{step.body}</p>
-                {step.photo_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={step.photo_url} alt="" className="mt-2 w-full rounded-lg" />
-                )}
+                <StepPhotos urls={step.photo_urls} />
               </div>
             </li>
           ))}

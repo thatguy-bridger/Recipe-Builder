@@ -7,7 +7,7 @@ import { titleCase } from "@/lib/text";
 import { parseFraction } from "@/lib/fractions";
 
 type IngredientInput = { amount: string; unit: string; name: string; category: string; note: string };
-type StepInput = { body: string; photo_url: string; is_pinned: boolean };
+type StepInput = { body: string; photo_urls: string[]; is_pinned: boolean; timer_minutes: string };
 
 function parseIngredients(raw: string): IngredientInput[] {
   return JSON.parse(raw);
@@ -29,6 +29,7 @@ export async function createRecipe(formData: FormData) {
   const servingUnit = titleCase(String(formData.get("serving_unit") || "Serving").trim()) || "Serving";
   const prep = String(formData.get("prep_minutes") || "").trim() || null;
   const cook = String(formData.get("cook_minutes") || "").trim() || null;
+  const total = String(formData.get("total_minutes") || "").trim() || null;
   const tags = String(formData.get("tags") || "")
     .split(",")
     .map((t) => titleCase(t.trim()))
@@ -56,6 +57,7 @@ export async function createRecipe(formData: FormData) {
       serving_unit: servingUnit,
       prep_minutes: prep,
       cook_minutes: cook,
+      total_minutes: total,
       tags,
       equipment,
       video_url: videoUrl,
@@ -94,6 +96,7 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
   const servingUnit = titleCase(String(formData.get("serving_unit") || "Serving").trim()) || "Serving";
   const prep = String(formData.get("prep_minutes") || "").trim() || null;
   const cook = String(formData.get("cook_minutes") || "").trim() || null;
+  const total = String(formData.get("total_minutes") || "").trim() || null;
   const tags = String(formData.get("tags") || "")
     .split(",")
     .map((t) => titleCase(t.trim()))
@@ -110,6 +113,11 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
     .split(",")
     .map((u) => u.trim())
     .filter(Boolean);
+  // Only ever allow redirecting to this recipe's own cook page — never trust
+  // an arbitrary path from form data.
+  const requestedRedirect = String(formData.get("redirect_to") || "").trim();
+  const safeRedirect =
+    requestedRedirect === `/recipes/${recipeId}/cook` ? requestedRedirect : `/recipes/${recipeId}`;
 
   // Everything below is independent of everything else (different tables, or
   // uses only the pre-fetched `existing` snapshot), so run it all at once
@@ -131,6 +139,7 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
         serving_unit: servingUnit,
         prep_minutes: prep,
         cook_minutes: cook,
+        total_minutes: total,
         tags,
         equipment,
         video_url: videoUrl,
@@ -152,7 +161,7 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath(`/recipes/${recipeId}`);
-  redirect(`/recipes/${recipeId}`);
+  redirect(safeRedirect);
 }
 
 async function writeChildren(
@@ -183,8 +192,9 @@ async function writeChildren(
             recipe_id: recipeId,
             position: i,
             body: step.body,
-            photo_url: step.photo_url || null,
+            photo_urls: step.photo_urls,
             is_pinned: step.is_pinned,
+            timer_minutes: step.timer_minutes || null,
           }))
         )
       : Promise.resolve(),
@@ -232,6 +242,7 @@ export async function duplicateRecipe(recipeId: string) {
       serving_unit: existing.serving_unit,
       prep_minutes: existing.prep_minutes,
       cook_minutes: existing.cook_minutes,
+      total_minutes: existing.total_minutes,
       tags: existing.tags,
       equipment: existing.equipment,
       video_url: existing.video_url,
@@ -279,13 +290,22 @@ export async function duplicateRecipe(recipeId: string) {
       : Promise.resolve(),
     steps.length > 0
       ? supabase.from("recipe_steps").insert(
-          steps.map((step: { position: number; body: string; photo_url: string | null; is_pinned: boolean }) => ({
-            recipe_id: copy.id,
-            position: step.position,
-            body: step.body,
-            photo_url: step.photo_url,
-            is_pinned: step.is_pinned,
-          }))
+          steps.map(
+            (step: {
+              position: number;
+              body: string;
+              photo_urls: string[];
+              is_pinned: boolean;
+              timer_minutes: string | null;
+            }) => ({
+              recipe_id: copy.id,
+              position: step.position,
+              body: step.body,
+              photo_urls: step.photo_urls,
+              is_pinned: step.is_pinned,
+              timer_minutes: step.timer_minutes,
+            })
+          )
         )
       : Promise.resolve(),
     photos.length > 0
@@ -310,6 +330,7 @@ type RecipeSnapshot = {
   serving_unit: string;
   prep_minutes: string | null;
   cook_minutes: string | null;
+  total_minutes: string | null;
   tags: string[];
   equipment: string[];
   video_url: string | null;
@@ -322,7 +343,13 @@ type RecipeSnapshot = {
     category: string | null;
     note: string | null;
   }[];
-  recipe_steps: { position: number; body: string; photo_url: string | null; is_pinned: boolean }[];
+  recipe_steps: {
+    position: number;
+    body: string;
+    photo_urls: string[];
+    is_pinned: boolean;
+    timer_minutes: string | null;
+  }[];
   recipe_photos: { position: number; url: string }[];
 };
 
@@ -367,6 +394,7 @@ export async function restoreVersion(recipeId: string, versionId: string) {
         serving_unit: snapshot.serving_unit,
         prep_minutes: snapshot.prep_minutes,
         cook_minutes: snapshot.cook_minutes,
+        total_minutes: snapshot.total_minutes,
         tags: snapshot.tags,
         equipment: snapshot.equipment,
         video_url: snapshot.video_url,
