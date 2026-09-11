@@ -28,14 +28,18 @@ describe("convertQuantity", () => {
     expect(result.amount).toBeCloseTo(3.5274, 3);
   });
 
-  it("picks the larger display unit once the amount reaches it", () => {
-    const result = convertQuantity(1500, "g", "metric");
+  it("picks the larger display unit once a cross-system conversion reaches it", () => {
+    const result = convertQuantity(5, "lb", "metric");
     expect(result.unit).toBe("kg");
-    expect(result.amount).toBeCloseTo(1.5, 3);
+    expect(result.amount).toBeCloseTo(2.268, 2);
   });
 
-  it("leaves an already-matching-system unit unchanged", () => {
-    expect(convertQuantity(2, "cup", "us")).toEqual({ amount: 2, unit: "cup" });
+  it("leaves an already-matching-system unit exactly as authored, even a large amount", () => {
+    // 5 cups is a lot, but it should stay "5 cups" rather than being
+    // silently rewritten as "1 1/4 quart" — the recipe author's own unit
+    // choice for a same-system amount is never second-guessed.
+    expect(convertQuantity(5, "cup", "us")).toEqual({ amount: 5, unit: "cup" });
+    expect(convertQuantity(1500, "g", "metric")).toEqual({ amount: 1500, unit: "g" });
   });
 
   it("leaves unrecognized units unchanged", () => {

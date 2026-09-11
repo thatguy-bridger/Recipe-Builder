@@ -87,6 +87,11 @@ export function convertQuantity(
   const key = unit ? normalizeUnit(unit) : null;
   const info = key ? UNITS[key] : undefined;
   if (!info) return { amount, unit };
+  // Already in the target system: leave it exactly as the recipe author
+  // wrote it. Re-deriving a "nicer" unit here would second-guess their
+  // judgment — e.g. rewriting "5 cups" of marshmallows as "1 1/4 quart",
+  // which is a technically-equal but unnatural way to measure them.
+  if (info.system === targetSystem) return { amount, unit };
 
   const baseAmount = amount * info.toBase;
   const candidates = DISPLAY_UNITS[targetSystem][info.kind];
