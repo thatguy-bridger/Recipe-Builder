@@ -16,6 +16,7 @@ export function ServingScaler({
   ingredients,
   showServings = true,
   highlightedIds,
+  highlightedCategories,
 }: {
   baseServings: number;
   servingUnit?: string;
@@ -24,6 +25,10 @@ export function ServingScaler({
   // Ingredient ids to visually call out — e.g. ones mentioned in the
   // current Cook Mode step — rendered bigger and highlighted.
   highlightedIds?: Set<string>;
+  // Category names to call out the same way — e.g. the step says "cheese"
+  // and there's no specific matching ingredient, but there's a "Cheese
+  // Options" category.
+  highlightedCategories?: Set<string>;
 }) {
   const [servings, setServings] = useState(baseServings || 1);
   const factor = servings / (baseServings || 1);
@@ -90,7 +95,11 @@ export function ServingScaler({
           <div key={category ?? "__uncategorized"}>
             {category && (
               <h3
-                className="mb-2 border-b border-[var(--border)] pb-1 font-serif font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]"
+                className={`mb-2 border-b pb-1 font-serif font-semibold uppercase tracking-[0.08em] transition-colors ${
+                  highlightedCategories?.has(category)
+                    ? "border-[var(--accent)] text-[var(--accent)]"
+                    : "border-[var(--border)] text-[var(--text-muted)]"
+                }`}
                 style={{ fontSize: "clamp(0.75rem, 3.6cqw, 0.95rem)" }}
               >
                 {category}

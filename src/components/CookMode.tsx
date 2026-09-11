@@ -17,7 +17,12 @@ import { StepPhotos } from "./StepPhotos";
 import { remainingSeconds, useCookTimer } from "./CookTimerProvider";
 import { buildIsolatedThemeStyle } from "@/lib/designLanguage";
 import { formatDuration, parseMinutesText } from "@/lib/duration";
-import { findMentionedIngredients, splitByTerms } from "@/lib/ingredientMatch";
+import {
+  findMentionedCategories,
+  findMentionedIngredients,
+  mentionedWords,
+  splitByTerms,
+} from "@/lib/ingredientMatch";
 
 type SubTimer = { stepId: string; total: number; remaining: number; running: boolean };
 
@@ -251,8 +256,11 @@ export function CookMode({
   }, [goNext, goPrevious, mainTimer.running, pauseMain, resumeMain, router, recipeId]);
 
   // Contextual ingredient highlighting: which ingredients does the current
-  // step's text mention, so they can be called out both in the step itself
-  // and (bigger) in the sidebar list.
+  // step's text mention (matching on any single significant word, not the
+  // whole name), so they can be called out both in the step itself and
+  // (bigger) in the sidebar list. Categories get the same treatment, but
+  // only when none of their own ingredients already matched — an individual
+  // ingredient match is more specific/accurate and takes priority.
   const currentStep = steps[current];
   const mentionedIngredients = useMemo(
     () => (currentStep ? findMentionedIngredients(currentStep.body, ingredients) : []),
@@ -262,7 +270,17 @@ export function CookMode({
     () => new Set(mentionedIngredients.map((i) => i.id)),
     [mentionedIngredients]
   );
-  const mentionedNames = useMemo(() => mentionedIngredients.map((i) => i.name), [mentionedIngredients]);
+  const highlightedCategories = useMemo(
+    () =>
+      currentStep
+        ? new Set(findMentionedCategories(currentStep.body, ingredients, highlightedIds))
+        : new Set<string>(),
+    [currentStep, ingredients, highlightedIds]
+  );
+  const highlightTerms = useMemo(
+    () => (currentStep ? mentionedWords(currentStep.body, ingredients) : []),
+    [currentStep, ingredients]
+  );
 
   return (
     <div className="relative flex w-full" style={buildIsolatedThemeStyle(ownerTheme)}>
@@ -302,6 +320,7 @@ export function CookMode({
             ingredients={ingredients}
             showServings={showServings}
             highlightedIds={highlightedIds}
+            highlightedCategories={highlightedCategories}
           />
           </div>
         </div>
@@ -470,7 +489,7 @@ export function CookMode({
                       </span>
                       <p className={isCurrent ? "text-lg leading-relaxed" : "text-sm leading-relaxed"}>
                         {isCurrent
-                          ? splitByTerms(step.body, mentionedNames).map((seg, si) =>
+                          ? splitByTerms(step.body, highlightTerms).map((seg, si) =>
                               seg.matched ? (
                                 <mark
                                   key={si}

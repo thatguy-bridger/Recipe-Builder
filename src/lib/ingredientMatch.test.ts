@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { findMentionedIngredients, splitByTerms } from "./ingredientMatch";
+import {
+  findMentionedCategories,
+  findMentionedIngredients,
+  mentionedWords,
+  splitByTerms,
+  textIsMentioned,
+} from "./ingredientMatch";
 
 function ing(id: string, name: string) {
   return { id, name };
@@ -35,6 +41,88 @@ describe("findMentionedIngredients", () => {
   it("ignores ingredients with a blank name", () => {
     const ingredients = [ing("1", "  ")];
     expect(findMentionedIngredients("Some step text.", ingredients)).toEqual([]);
+  });
+
+  it("matches on a single word even when the rest of the name isn't mentioned", () => {
+    const ingredients = [ing("1", "Large Strawberries")];
+    const result = findMentionedIngredients(
+      "Wash the strawberries and cut into brunoise.",
+      ingredients
+    );
+    expect(result.map((i) => i.id)).toEqual(["1"]);
+  });
+
+  it("is case-insensitive on a single-word match", () => {
+    const ingredients = [ing("1", "Orange Zest")];
+    expect(findMentionedIngredients("Add the ZEST from an orange.", ingredients).map((i) => i.id)).toEqual([
+      "1",
+    ]);
+  });
+
+  it("does not match on stop words or short words alone", () => {
+    // "A Bit Of Salt" reduces to significant words ["bit", "salt"] — "a" and
+    // "of" are stop words, so a step mentioning neither "bit" nor "salt"
+    // shouldn't match just because it happens to contain "a" or "of".
+    const ingredients = [ing("1", "A Bit Of Salt")];
+    expect(findMentionedIngredients("Add a little of this.", ingredients)).toEqual([]);
+  });
+});
+
+describe("textIsMentioned", () => {
+  it("matches a single significant word", () => {
+    expect(textIsMentioned("Add the ricotta and basil.", "Cheese Options")).toBe(false);
+    expect(textIsMentioned("Add some cheese on top.", "Cheese Options")).toBe(true);
+  });
+});
+
+describe("mentionedWords", () => {
+  it("returns only the words that actually matched, not full names", () => {
+    const ingredients = [ing("1", "Large Strawberries"), ing("2", "Ricotta")];
+    const words = mentionedWords("Wash the strawberries.", ingredients);
+    expect(words).toEqual(["strawberries"]);
+  });
+
+  it("dedupes words shared across ingredients", () => {
+    const ingredients = [ing("1", "Cream Cheese"), ing("2", "Whipped Cheese")];
+    const words = mentionedWords("Add the cheese now.", ingredients);
+    expect(words).toEqual(["cheese"]);
+  });
+});
+
+describe("findMentionedCategories", () => {
+  function ingWithCategory(id: string, name: string, category: string | null) {
+    return { id, name, category };
+  }
+
+  it("highlights a category whose name is mentioned", () => {
+    const ingredients = [ingWithCategory("1", "Ricotta", "Cheese Options")];
+    const result = findMentionedCategories("Add some cheese.", ingredients, new Set());
+    expect(result).toEqual(["Cheese Options"]);
+  });
+
+  it("suppresses the category when one of its ingredients is already highlighted", () => {
+    const ingredients = [ingWithCategory("1", "Cheese Spread", "Cheese Options")];
+    // "cheese" matched ingredient 1 already — the category shouldn't also light up.
+    const result = findMentionedCategories("Add the cheese spread.", ingredients, new Set(["1"]));
+    expect(result).toEqual([]);
+  });
+
+  it("still highlights an unrelated category even when another ingredient is highlighted", () => {
+    const ingredients = [
+      ingWithCategory("1", "Ricotta", "Cheese Options"),
+      ingWithCategory("2", "Basil", "Topping Options"),
+    ];
+    const result = findMentionedCategories(
+      "Add basil and some cheese.",
+      ingredients,
+      new Set(["2"])
+    );
+    expect(result).toEqual(["Cheese Options"]);
+  });
+
+  it("ignores uncategorized ingredients", () => {
+    const ingredients = [ingWithCategory("1", "Ricotta", null)];
+    expect(findMentionedCategories("Add cheese.", ingredients, new Set())).toEqual([]);
   });
 });
 
