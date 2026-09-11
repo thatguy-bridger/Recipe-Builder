@@ -70,7 +70,9 @@ export default async function DashboardPage() {
             const photos = (recipe.recipe_photos ?? []).sort(
               (a: { position: number }, b: { position: number }) => a.position - b.position
             );
-            return <RecipeCard key={recipe.id} recipe={recipe} photoUrl={photos[0]?.url} />;
+            return (
+              <RecipeCard key={recipe.id} recipe={recipe} photoUrl={photos[0]?.url} canEdit />
+            );
           })}
         </div>
       )}
@@ -83,7 +85,9 @@ export default async function DashboardPage() {
               const photos = (recipe.recipe_photos ?? []).sort(
                 (a: { position: number }, b: { position: number }) => a.position - b.position
               );
-              return <RecipeCard key={recipe.id} recipe={recipe} photoUrl={photos[0]?.url} />;
+              return (
+              <RecipeCard key={recipe.id} recipe={recipe} photoUrl={photos[0]?.url} canEdit />
+            );
             })}
           </div>
         </>
