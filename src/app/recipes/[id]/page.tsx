@@ -93,7 +93,7 @@ export default async function RecipeDetailPage({
         <img
           src={photos[0].url}
           alt={recipe.title}
-          className="mt-6 aspect-video w-full rounded-[var(--radius)] object-cover shadow-[var(--shadow)]"
+          className="mx-auto mt-6 block max-h-[500px] w-auto max-w-full rounded-[var(--radius)] shadow-[var(--shadow)]"
         />
       )}
 

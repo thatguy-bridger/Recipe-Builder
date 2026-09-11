@@ -2,21 +2,21 @@
 
 import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { ImageCropEditor } from "./ImageCropEditor";
+import { ImageCropEditor, type CropShape } from "./ImageCropEditor";
 import { ImageLibraryPicker } from "./ImageLibraryPicker";
 
 // Every photo that enters the app goes through this: pick a file (or several)
 // or choose one already uploaded, crop/reposition it, then it's saved. No
 // raw, uncropped uploads.
 export function PhotoPicker({
-  aspect,
+  initialShape,
   outputWidth = 1200,
   multiple = false,
   onAdd,
   children,
   className,
 }: {
-  aspect: number;
+  initialShape?: CropShape;
   outputWidth?: number;
   multiple?: boolean;
   onAdd: (url: string) => void;
@@ -112,7 +112,7 @@ export function PhotoPicker({
       {cropSrc && (
         <ImageCropEditor
           src={cropSrc}
-          aspect={aspect}
+          initialShape={initialShape}
           outputWidth={outputWidth}
           onCancel={advanceQueue}
           onSave={handleCropSave}

@@ -526,7 +526,7 @@ export function RecipeForm({
                 >
                   <EditableImage
                     src={url}
-                    aspect={i === 0 ? 4 / 3 : 1}
+                    initialShape={i === 0 ? "landscape" : "square"}
                     outputWidth={i === 0 ? 2000 : 1200}
                     className="h-24 w-24"
                     onChange={(newUrl) =>
@@ -550,7 +550,7 @@ export function RecipeForm({
               );
             })}
             <PhotoPicker
-              aspect={photoUrls.length === 0 ? 4 / 3 : 1}
+              initialShape={photoUrls.length === 0 ? "landscape" : "square"}
               outputWidth={photoUrls.length === 0 ? 2000 : 1200}
               multiple
               onAdd={(url) => setPhotoUrls((p) => [...p, url])}
@@ -816,7 +816,7 @@ export function RecipeForm({
                         >
                           <EditableImage
                             src={url}
-                            aspect={1}
+                            initialShape="square"
                             className="h-12 w-12"
                             onChange={(newUrl) =>
                               setSteps((rows) =>
@@ -853,7 +853,7 @@ export function RecipeForm({
                       );
                     })}
                     <PhotoPicker
-                      aspect={1}
+                      initialShape="square"
                       outputWidth={800}
                       multiple
                       onAdd={(url) =>

@@ -2,19 +2,19 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { ImageCropEditor } from "./ImageCropEditor";
+import { ImageCropEditor, type CropShape } from "./ImageCropEditor";
 
 export function EditableImage({
   src,
   alt = "",
-  aspect,
+  initialShape,
   outputWidth = 1200,
   className,
   onChange,
 }: {
   src: string;
   alt?: string;
-  aspect: number;
+  initialShape?: CropShape;
   outputWidth?: number;
   className?: string;
   onChange: (newUrl: string) => void;
@@ -55,7 +55,7 @@ export function EditableImage({
       {editing && (
         <ImageCropEditor
           src={src}
-          aspect={aspect}
+          initialShape={initialShape}
           outputWidth={outputWidth}
           onCancel={() => setEditing(false)}
           onSave={handleSave}

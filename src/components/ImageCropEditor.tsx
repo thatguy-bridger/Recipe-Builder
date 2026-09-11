@@ -4,22 +4,37 @@ import { useEffect, useRef, useState } from "react";
 
 type Offset = { x: number; y: number };
 
+export const CROP_SHAPES = {
+  landscape: { label: "Landscape", ratio: 4 / 3 },
+  square: { label: "Square", ratio: 1 },
+  vertical: { label: "Vertical", ratio: 3 / 4 },
+} as const;
+
+export type CropShape = keyof typeof CROP_SHAPES;
+
+// The crop frame's aspect ratio only ever snaps to one of the three shapes
+// above — never freely resizable — while drag-to-reposition and the zoom
+// slider stay available inside whichever shape is picked. Whatever gets
+// saved here is the image's one true framing: nothing downstream re-crops
+// it via CSS object-fit tricks.
 export function ImageCropEditor({
   src,
-  aspect,
+  initialShape = "square",
   outputWidth = 1200,
   quality = 0.92,
   onCancel,
   onSave,
 }: {
   src: string;
-  aspect: number; // width / height
+  initialShape?: CropShape;
   outputWidth?: number;
   quality?: number;
   onCancel: () => void;
   onSave: (blob: Blob) => void;
 }) {
   const imgRef = useRef<HTMLImageElement>(null);
+  const [shape, setShape] = useState<CropShape>(initialShape);
+  const aspect = CROP_SHAPES[shape].ratio;
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [frameSize, setFrameSize] = useState({ w: 420, h: 420 / aspect });
   const [zoom, setZoom] = useState(1);
@@ -54,17 +69,34 @@ export function ImageCropEditor({
     };
   }
 
+  function recenter(natural = naturalSize, frame = frameSize) {
+    if (!natural) return;
+    setZoom(1);
+    const scale = baseScale(natural, frame);
+    setOffset({
+      x: (frame.w - natural.w * scale) / 2,
+      y: (frame.h - natural.h * scale) / 2,
+    });
+  }
+
   function handleImgLoad() {
     const el = imgRef.current;
     if (!el) return;
     const natural = { w: el.naturalWidth, h: el.naturalHeight };
     setNaturalSize(natural);
-    const scale = baseScale(natural, frameSize);
-    setOffset({
-      x: (frameSize.w - natural.w * scale) / 2,
-      y: (frameSize.h - natural.h * scale) / 2,
-    });
+    recenter(natural, frameSize);
   }
+
+  // Re-center whenever the frame's shape changes (a new aspect ratio, or a
+  // window resize) so the crop never ends up misaligned relative to the new
+  // frame — otherwise switching shapes mid-crop could leave gaps or an
+  // off-center view.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!naturalSize) return;
+    recenter(naturalSize, frameSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frameSize.w, frameSize.h]);
 
   function onPointerDown(e: React.PointerEvent) {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -131,7 +163,25 @@ export function ImageCropEditor({
         className="flex flex-col gap-4 rounded-[var(--radius)] bg-[var(--bg-elevated)] p-5 shadow-[var(--shadow)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="text-sm font-medium">Drag to reposition, use the slider to zoom</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium">Drag to reposition, use the slider to zoom</p>
+          <div className="flex shrink-0 gap-1 rounded-full border border-[var(--border)] p-1">
+            {(Object.keys(CROP_SHAPES) as CropShape[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setShape(key)}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  shape === key
+                    ? "bg-[var(--accent)] text-white"
+                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
+              >
+                {CROP_SHAPES[key].label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div
           style={{ width: frameSize.w, height: frameSize.h }}
           className="relative touch-none select-none overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]"
@@ -183,7 +233,7 @@ export function ImageCropEditor({
             type="button"
             onClick={handleSave}
             disabled={saving || !naturalSize}
-            className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
+            className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--accent-hover)]"
           >
             {saving ? "Saving..." : "Save crop"}
           </button>
