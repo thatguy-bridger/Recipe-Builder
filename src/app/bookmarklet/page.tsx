@@ -3,6 +3,7 @@ import path from "node:path";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { BookmarkletLink } from "@/components/BookmarkletLink";
 
 // Builds the "Import to Recipe Boxed" bookmarklet from extension/extractor.js
 // (the exact same extraction logic the browser extension's popup uses) so
@@ -66,14 +67,11 @@ export default async function BookmarkletPage() {
         data travels only in the URL your browser opens.
       </p>
 
-      <a
-        href={href}
-        onClick={(e) => e.preventDefault()}
-        className="inline-block cursor-grab select-none rounded-full bg-[var(--accent)] px-5 py-2.5 font-medium text-white shadow-[var(--shadow)] hover:bg-[var(--accent-hover)]"
-        draggable
-      >
-        📥 Import to Recipe Boxed
-      </a>
+      <BookmarkletLink href={href}>📥 Import to Recipe Boxed</BookmarkletLink>
+      <p className="mt-3 text-xs text-[var(--text-muted)]">
+        Already dragged this before and it just opens a blank page instead of running? Delete
+        that bookmark and drag this one again — it was generated before a fix and won&apos;t work.
+      </p>
 
       <ol className="mt-8 flex list-decimal flex-col gap-2 pl-5 text-sm text-[var(--text-muted)]">
         <li>Drag the button above onto your browser&apos;s bookmarks bar (show it first if it&apos;s hidden).</li>
