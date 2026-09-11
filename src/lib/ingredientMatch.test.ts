@@ -94,17 +94,35 @@ describe("findMentionedCategories", () => {
     return { id, name, category };
   }
 
-  it("highlights a category whose name is mentioned", () => {
+  it("highlights a category whose name is mentioned, when nothing in it is individually highlighted", () => {
     const ingredients = [ingWithCategory("1", "Ricotta", "Cheese Options")];
-    const result = findMentionedCategories("Add some cheese.", ingredients, new Set());
-    expect(result).toEqual(["Cheese Options"]);
+    const result = findMentionedCategories("Add some basil.", ingredients, new Set());
+    expect(result).toEqual([]); // "basil" doesn't mention the category at all
+    expect(
+      findMentionedCategories("Add some cheese.", ingredients, new Set())
+    ).toEqual(["Cheese Options"]);
   });
 
-  it("suppresses the category when one of its ingredients is already highlighted", () => {
-    const ingredients = [ingWithCategory("1", "Cheese Spread", "Cheese Options")];
-    // "cheese" matched ingredient 1 already — the category shouldn't also light up.
-    const result = findMentionedCategories("Add the cheese spread.", ingredients, new Set(["1"]));
+  it("suppresses the category when the matched word is specific to the ingredient, not the category", () => {
+    const ingredients = [ingWithCategory("1", "Ricotta", "Cheese Options")];
+    // "ricotta" matched ingredient 1, and "ricotta" isn't a word in "Cheese
+    // Options" — a genuinely specific match, so the category stays off.
+    const result = findMentionedCategories("Add the ricotta.", ingredients, new Set(["1"]));
     expect(result).toEqual([]);
+  });
+
+  it("keeps the category highlighted when the matched word is shared with the category's own name", () => {
+    const ingredients = [ingWithCategory("1", "Whipped Cream Cheese", "Cheese Options")];
+    // "cheese" matched the ingredient, but "cheese" is also a word in
+    // "Cheese Options" itself — too generic to say it means only this one
+    // ingredient (there could be other cheeses in the same category), so
+    // the category highlight is NOT suppressed.
+    const result = findMentionedCategories(
+      "Top with some cheese.",
+      ingredients,
+      new Set(["1"])
+    );
+    expect(result).toEqual(["Cheese Options"]);
   });
 
   it("still highlights an unrelated category even when another ingredient is highlighted", () => {

@@ -67,28 +67,42 @@ export function mentionedWords<T extends { id: string; name: string }>(
 }
 
 // Which categories are worth highlighting, given a step body and the set of
-// ingredient ids already highlighted individually. A category is only
-// highlighted when its own name is mentioned AND none of its ingredients
-// are already highlighted — an individual ingredient match is more
-// accurate/specific, so it takes priority over the broader category (e.g.
-// if "cheese" matched the "Ricotta" ingredient, don't also light up a
-// "Cheese Options" category heading for the same word).
-export function findMentionedCategories<T extends { id: string; category: string | null }>(
+// ingredient ids already highlighted individually.
+//
+// An individual ingredient match is usually more accurate/specific than its
+// category, so it normally takes priority: if "ricotta" matched the
+// "Ricotta" ingredient, don't also light up "Cheese Options" for the same
+// word — "ricotta" isn't a word in "Cheese Options" at all, so the match is
+// genuinely about that one ingredient.
+//
+// But that only holds when the matching word is actually specific to the
+// ingredient. If the word is shared with the category's own name — "cheese"
+// matching "Whipped Cream Cheese" inside "Cheese Options" — the match is too
+// generic to say it means THAT one ingredient rather than the category (or
+// mixture) as a whole, so the category stays highlighted alongside it.
+export function findMentionedCategories<T extends { id: string; name: string; category: string | null }>(
   stepBody: string,
   ingredients: T[],
   highlightedIngredientIds: Set<string>
 ): string[] {
+  const lowerBody = stepBody.toLowerCase();
   const categories = Array.from(
-    new Set(
-      ingredients.map((i) => i.category?.trim()).filter((c): c is string => Boolean(c))
-    )
+    new Set(ingredients.map((i) => i.category?.trim()).filter((c): c is string => Boolean(c)))
   );
+
   return categories.filter((category) => {
-    const hasHighlightedIngredient = ingredients.some(
+    const categoryWords = new Set(significantWords(category));
+    const highlightedInCategory = ingredients.filter(
       (i) => i.category?.trim() === category && highlightedIngredientIds.has(i.id)
     );
-    if (hasHighlightedIngredient) return false;
-    return textIsMentioned(stepBody, category);
+
+    if (highlightedInCategory.length === 0) {
+      return textIsMentioned(stepBody, category);
+    }
+
+    return highlightedInCategory.some((i) =>
+      significantWords(i.name).some((w) => categoryWords.has(w) && wordAppears(w, lowerBody))
+    );
   });
 }
 
