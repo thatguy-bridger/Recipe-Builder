@@ -19,7 +19,6 @@ import { buildIsolatedThemeStyle } from "@/lib/designLanguage";
 import { formatDuration, parseMinutesText } from "@/lib/duration";
 import {
   findMentionedCategories,
-  findMentionedIngredients,
   mentionedWordMap,
   splitByTerms,
 } from "@/lib/ingredientMatch";
@@ -354,37 +353,6 @@ export function CookMode({
   // only when none of their own ingredients already matched — an individual
   // ingredient match is more specific/accurate and takes priority.
   const currentStep = steps[current];
-  const mentionedIngredients = useMemo(
-    () => (currentStep ? findMentionedIngredients(currentStep.body, scaledIngredients) : []),
-    [currentStep, scaledIngredients]
-  );
-  const highlightedIds = useMemo(
-    () => new Set(mentionedIngredients.map((i) => i.id)),
-    [mentionedIngredients]
-  );
-  const highlightedCategories = useMemo(
-    () =>
-      currentStep
-        ? new Set(findMentionedCategories(currentStep.body, scaledIngredients, highlightedIds))
-        : new Set<string>(),
-    [currentStep, scaledIngredients, highlightedIds]
-  );
-
-  // When the current step mentions an ingredient that isn't already visible
-  // in the (possibly scrolled) ingredients list, bring it into view — a
-  // cook shouldn't have to go hunting for it every time the step changes.
-  useEffect(() => {
-    const firstId = mentionedIngredients[0]?.id;
-    if (!firstId || !ingredientsScrollRef.current) return;
-    const el = ingredientsScrollRef.current.querySelector(`[data-ingredient-id="${firstId}"]`);
-    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [mentionedIngredients]);
-
-  // Keep the current step vertically centered as the cook moves through the
-  // recipe, instead of it landing wherever it happens to fall in the grid.
-  useEffect(() => {
-    currentStepRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [current]);
   // Which ingredient each highlighted word came from, so its quantity can
   // be shown right above the word in the step text — no need to glance
   // back at the sidebar list mid-step.
@@ -454,6 +422,43 @@ export function CookMode({
     () => Array.from(highlightWordToIngredient.keys()),
     [highlightWordToIngredient]
   );
+
+  // Which ingredients are mentioned in the current step, for the (bigger)
+  // sidebar callout — derived from the same feedback-resolved map as the
+  // inline word marks, so a thumbs-down here also un-highlights it there
+  // instead of leaving the sidebar showing an ingredient the step text no
+  // longer calls out.
+  const mentionedIngredients = useMemo(
+    () => Array.from(new Set(highlightWordToIngredient.values())),
+    [highlightWordToIngredient]
+  );
+  const highlightedIds = useMemo(
+    () => new Set(mentionedIngredients.map((i) => i.id)),
+    [mentionedIngredients]
+  );
+  const highlightedCategories = useMemo(
+    () =>
+      currentStep
+        ? new Set(findMentionedCategories(currentStep.body, scaledIngredients, highlightedIds))
+        : new Set<string>(),
+    [currentStep, scaledIngredients, highlightedIds]
+  );
+
+  // When the current step mentions an ingredient that isn't already visible
+  // in the (possibly scrolled) ingredients list, bring it into view — a
+  // cook shouldn't have to go hunting for it every time the step changes.
+  useEffect(() => {
+    const firstId = mentionedIngredients[0]?.id;
+    if (!firstId || !ingredientsScrollRef.current) return;
+    const el = ingredientsScrollRef.current.querySelector(`[data-ingredient-id="${firstId}"]`);
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [mentionedIngredients]);
+
+  // Keep the current step vertically centered as the cook moves through the
+  // recipe, instead of it landing wherever it happens to fall in the grid.
+  useEffect(() => {
+    currentStepRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [current]);
 
   const handleVote = useCallback(
     (stepId: string, ingredientId: string, word: string, vote: "up" | "down") => {
@@ -531,7 +536,7 @@ export function CookMode({
         <img
           src={ownerTheme.theme_watermark_url}
           alt=""
-          className="pointer-events-none fixed bottom-6 left-6 z-40 h-9 w-9 rounded-full object-cover opacity-80 shadow-[var(--shadow)]"
+          className="pointer-events-none fixed bottom-6 right-6 z-40 h-9 w-9 rounded-full object-cover opacity-80 shadow-[var(--shadow)]"
         />
       )}
       <aside
