@@ -1,19 +1,18 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { BookmarkletLink } from "@/components/BookmarkletLink";
+import { EXTRACTOR_SOURCE } from "@/generated/extractorSource";
 
 // Builds the "Import to Recipe Boxed" bookmarklet from extension/extractor.js
 // (the exact same extraction logic the browser extension's popup uses) so
-// there's a single source of truth, read fresh from disk on every request
-// rather than duplicated into a TS string that could drift out of sync.
+// there's a single source of truth. EXTRACTOR_SOURCE is generated from that
+// file at config-evaluation time (see next.config.ts) rather than read off
+// disk here — this app deploys to Cloudflare Workers, which have no
+// filesystem at runtime, so a request-time fs.readFileSync can never work
+// there no matter how the file is bundled.
 function buildBookmarkletHref(siteOrigin: string): string {
-  const extractorPath = path.join(process.cwd(), "extension", "extractor.js");
-  const source = readFileSync(extractorPath, "utf8");
-
-  const functionBody = source
+  const functionBody = EXTRACTOR_SOURCE
     .replace(/^\/\/.*\n/gm, "")
     .replace(/\n?recipeBoxedExtract\(\);\s*$/, "");
 
