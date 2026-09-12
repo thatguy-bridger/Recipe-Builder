@@ -52,7 +52,14 @@ export function RecipeCard({
           )}
         </div>
         <div className="flex flex-1 flex-col gap-1.5 p-4">
-          <h3 className="font-serif text-lg font-semibold leading-tight">{recipe.title}</h3>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-serif text-lg font-semibold leading-tight">{recipe.title}</h3>
+            {recipe.total_minutes && (
+              <span className="shrink-0 whitespace-nowrap rounded-full bg-[var(--bg-muted)] px-2 py-0.5 text-xs font-medium text-[var(--text-muted)]">
+                ⏱ {recipe.total_minutes} min
+              </span>
+            )}
+          </div>
           {recipe.description && (
             <p className="line-clamp-2 text-sm text-[var(--text-muted)]">{recipe.description}</p>
           )}

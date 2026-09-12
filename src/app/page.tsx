@@ -7,9 +7,9 @@ const PAGE_SIZE = 24;
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; tag?: string; favorites?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; tag?: string; favorites?: string; page?: string; sort?: string }>;
 }) {
-  const { q, tag, favorites, page: pageParam } = await searchParams;
+  const { q, tag, favorites, page: pageParam, sort: sortParam } = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -18,6 +18,7 @@ export default async function HomePage({
 
   const page = Math.max(1, Number(pageParam) || 1);
   const favoritesOnly = favorites === "1";
+  const sort = sortParam === "quickest" || sortParam === "slowest" ? sortParam : "newest";
 
   const { data: searchResult, error: searchError } = await supabase.rpc("search_recipes", {
     p_query: q?.trim() || null,
@@ -25,6 +26,7 @@ export default async function HomePage({
     p_favorites_only: favoritesOnly,
     p_limit: PAGE_SIZE,
     p_offset: (page - 1) * PAGE_SIZE,
+    p_sort: sort,
   });
 
   const ids = (searchResult ?? []).map((r: { id: string }) => r.id);
@@ -60,6 +62,7 @@ export default async function HomePage({
     if (q) params.set("q", q);
     if (tag) params.set("tag", tag);
     if (favoritesOnly) params.set("favorites", "1");
+    if (sort !== "newest") params.set("sort", sort);
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return qs ? `/?${qs}` : "/";
@@ -79,7 +82,7 @@ export default async function HomePage({
           type="text"
           name="q"
           defaultValue={q}
-          placeholder="Search recipes, ingredients, even steps..."
+          placeholder="Search recipes, ingredients, a max minutes (e.g. 30)..."
           className="w-full max-w-sm rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-sm outline-none focus:border-[var(--accent)] sm:w-auto"
         />
         {tag && <input type="hidden" name="tag" value={tag} />}
@@ -87,6 +90,15 @@ export default async function HomePage({
           <input type="checkbox" name="favorites" value="1" defaultChecked={favoritesOnly} />
           Favorites only
         </label>
+        <select
+          name="sort"
+          defaultValue={sort}
+          className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+        >
+          <option value="newest">Newest</option>
+          <option value="quickest">Quickest first</option>
+          <option value="slowest">Slowest first</option>
+        </select>
         <button
           type="submit"
           className="rounded-full border border-[var(--border)] px-4 py-1.5 text-sm hover:bg-[var(--bg-muted)]"
@@ -102,6 +114,7 @@ export default async function HomePage({
               const params = new URLSearchParams();
               if (q) params.set("q", q);
               if (favoritesOnly) params.set("favorites", "1");
+              if (sort !== "newest") params.set("sort", sort);
               const qs = params.toString();
               return qs ? `/?${qs}` : "/";
             })()}
@@ -117,6 +130,7 @@ export default async function HomePage({
             const params = new URLSearchParams();
             if (q) params.set("q", q);
             if (favoritesOnly) params.set("favorites", "1");
+            if (sort !== "newest") params.set("sort", sort);
             if (t !== tag) params.set("tag", t);
             const qs = params.toString();
             return (
