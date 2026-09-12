@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CookMode } from "@/components/CookMode";
 import { OfflineCacheWriter } from "@/components/OfflineCacheWriter";
 import type { RecipeWithDetails } from "@/types/recipe";
+import { buildFeedbackSets } from "@/lib/matchFeedback";
 
 type OwnerTheme = {
   theme_accent: string | null;
@@ -32,6 +33,15 @@ export default async function CookModePage({
   const ingredients = [...recipe.recipe_ingredients].sort((a, b) => a.position - b.position);
   const steps = [...recipe.recipe_steps].sort((a, b) => a.position - b.position);
 
+  // Every downvote this cook has ever left, across all their recipes — used
+  // to both hide the exact instance they flagged and, once the same word has
+  // been flagged on enough different recipes, auto-suppress it everywhere.
+  const { data: feedbackRows } = await supabase
+    .from("ingredient_match_feedback")
+    .select("step_id, ingredient_id, word, recipe_id")
+    .eq("vote", "down");
+  const { suppressed, globalBlocklist } = buildFeedbackSets(feedbackRows ?? []);
+
   return (
     <>
       <OfflineCacheWriter
@@ -57,6 +67,8 @@ export default async function CookModePage({
         ingredients={ingredients}
         equipment={recipe.equipment}
         steps={steps}
+        initialSuppressed={Array.from(suppressed)}
+        initialGlobalBlocklist={Array.from(globalBlocklist)}
       />
     </>
   );

@@ -21,10 +21,11 @@ import {
   findMentionedCategories,
   findMentionedIngredients,
   mentionedWordMap,
-  mentionedWords,
   splitByTerms,
 } from "@/lib/ingredientMatch";
 import { formatIngredientQuantity } from "@/lib/ingredients";
+import { matchFeedbackKey } from "@/lib/matchFeedback";
+import { submitIngredientMatchFeedback } from "@/app/actions/matchFeedback";
 
 type SubTimer = { stepId: string; total: number; remaining: number; running: boolean };
 
@@ -38,6 +39,8 @@ export function CookMode({
   ingredients,
   equipment,
   steps,
+  initialSuppressed = [],
+  initialGlobalBlocklist = [],
 }: {
   recipeId: string;
   title: string;
@@ -53,6 +56,8 @@ export function CookMode({
   ingredients: Ingredient[];
   equipment: string[];
   steps: Step[];
+  initialSuppressed?: string[];
+  initialGlobalBlocklist?: string[];
 }) {
   const splitStorageKey = `cookmode-split-${recipeId}`;
   const widthStorageKey = `cookmode-width-${recipeId}`;
@@ -64,6 +69,13 @@ export function CookMode({
   const [showServings, setShowServings] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showInlineAmounts, setShowInlineAmounts] = useState(true);
+  // Feedback-driven suppression: exact (step, ingredient, word) instances a
+  // cook has thumbed down, plus words thumbed down often enough across
+  // different recipes to auto-blocklist everywhere. Both start from what's
+  // already in the database and grow as votes come in this session.
+  const [suppressed, setSuppressed] = useState(() => new Set(initialSuppressed));
+  const [globalBlocklist, setGlobalBlocklist] = useState(() => new Set(initialGlobalBlocklist));
+  const [voted, setVoted] = useState<Map<string, "up" | "down">>(new Map());
   const dragging = useRef(false);
   const asideRef = useRef<HTMLElement>(null);
   const ingredientsContentRef = useRef<HTMLDivElement>(null);
@@ -281,16 +293,52 @@ export function CookMode({
         : new Set<string>(),
     [currentStep, ingredients, highlightedIds]
   );
-  const highlightTerms = useMemo(
-    () => (currentStep ? mentionedWords(currentStep.body, ingredients) : []),
-    [currentStep, ingredients]
-  );
   // Which ingredient each highlighted word came from, so its quantity can
   // be shown right above the word in the step text — no need to glance
   // back at the sidebar list mid-step.
-  const highlightWordToIngredient = useMemo(
+  const rawWordToIngredient = useMemo(
     () => (currentStep ? mentionedWordMap(currentStep.body, ingredients) : new Map()),
     [currentStep, ingredients]
+  );
+  // Drop anything a cook has thumbed down for this exact spot, or that's
+  // been thumbed down often enough elsewhere to be globally unreliable.
+  const highlightWordToIngredient = useMemo(() => {
+    if (!currentStep) return rawWordToIngredient;
+    const filtered = new Map(rawWordToIngredient);
+    for (const [word, ing] of rawWordToIngredient) {
+      if (
+        globalBlocklist.has(word) ||
+        suppressed.has(matchFeedbackKey(currentStep.id, ing.id, word))
+      ) {
+        filtered.delete(word);
+      }
+    }
+    return filtered;
+  }, [rawWordToIngredient, currentStep, suppressed, globalBlocklist]);
+  const highlightTerms = useMemo(
+    () => Array.from(highlightWordToIngredient.keys()),
+    [highlightWordToIngredient]
+  );
+
+  const handleVote = useCallback(
+    (stepId: string, ingredientId: string, word: string, vote: "up" | "down") => {
+      const key = matchFeedbackKey(stepId, ingredientId, word);
+      setVoted((v) => new Map(v).set(key, vote));
+      if (vote === "down") {
+        setSuppressed((s) => new Set(s).add(key));
+      }
+      submitIngredientMatchFeedback({
+        recipeId,
+        stepId,
+        ingredientId,
+        word,
+        vote,
+      }).catch(() => {
+        // Best-effort: the local suppression already took effect for this
+        // session even if the write fails; it'll just re-appear next visit.
+      });
+    },
+    [recipeId]
   );
 
   return (
@@ -542,10 +590,14 @@ export function CookMode({
                                   showInlineAmounts && matchedIngredient && termCounts.get(key) === 1
                                     ? formatIngredientQuantity(matchedIngredient)
                                     : "";
+                                const feedbackKey = matchedIngredient
+                                  ? matchFeedbackKey(step.id, matchedIngredient.id, key)
+                                  : null;
+                                const vote = feedbackKey ? voted.get(feedbackKey) : undefined;
                                 return (
                                   <mark
                                     key={si}
-                                    className="inline-flex items-center gap-1 rounded bg-[var(--accent-soft)] px-0.5 align-bottom text-[var(--accent)]"
+                                    className="group/word relative inline-flex items-center gap-1 rounded bg-[var(--accent-soft)] px-0.5 align-bottom text-[var(--accent)]"
                                   >
                                     {quantity && (
                                       <span className="whitespace-nowrap rounded bg-[var(--bg-muted)] px-1 py-0.5 text-[10px] font-semibold leading-none text-[var(--accent)]">
@@ -553,6 +605,36 @@ export function CookMode({
                                       </span>
                                     )}
                                     <span>{seg.text}</span>
+                                    {matchedIngredient && (
+                                      <span className="pointer-events-none absolute -top-8 left-1/2 z-30 hidden -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs shadow-[var(--shadow)] group-hover/word:pointer-events-auto group-hover/word:flex">
+                                        <button
+                                          type="button"
+                                          title="This is matching correctly"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleVote(step.id, matchedIngredient.id, key, "up");
+                                          }}
+                                          className={`rounded-full px-1.5 py-0.5 leading-none hover:bg-[var(--bg-muted)] ${
+                                            vote === "up" ? "bg-[var(--accent-soft)]" : ""
+                                          }`}
+                                        >
+                                          👍
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Stop matching this"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleVote(step.id, matchedIngredient.id, key, "down");
+                                          }}
+                                          className={`rounded-full px-1.5 py-0.5 leading-none hover:bg-[var(--bg-muted)] ${
+                                            vote === "down" ? "bg-[var(--accent-soft)]" : ""
+                                          }`}
+                                        >
+                                          👎
+                                        </button>
+                                      </span>
+                                    )}
                                   </mark>
                                 );
                               });
