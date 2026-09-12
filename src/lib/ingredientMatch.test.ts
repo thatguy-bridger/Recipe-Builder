@@ -67,6 +67,25 @@ describe("findMentionedIngredients", () => {
     const ingredients = [ing("1", "A Bit Of Salt")];
     expect(findMentionedIngredients("Add a little of this.", ingredients)).toEqual([]);
   });
+
+  it("matches a singular ingredient name against a plural mention in the step", () => {
+    const ingredients = [ing("1", "Egg")];
+    expect(findMentionedIngredients("Whisk the eggs together.", ingredients).map((i) => i.id)).toEqual(["1"]);
+  });
+
+  it("matches a plural ingredient name against a singular mention in the step", () => {
+    const ingredients = [ing("1", "Tomatoes")];
+    expect(findMentionedIngredients("Dice the tomato finely.", ingredients).map((i) => i.id)).toEqual(["1"]);
+  });
+
+  it("does not strip a trailing s from words too short to stem safely", () => {
+    // "Gas" is only 3 letters — stripping its trailing "s" would produce a
+    // nonsense 2-letter word ("ga"), so it should still match "gas" itself
+    // (unstemmed) but not a totally different word.
+    const ingredients = [ing("1", "Gas Grill")];
+    expect(findMentionedIngredients("Light the gas grill.", ingredients).map((i) => i.id)).toEqual(["1"]);
+    expect(findMentionedIngredients("Turn on the burner.", ingredients)).toEqual([]);
+  });
 });
 
 describe("textIsMentioned", () => {

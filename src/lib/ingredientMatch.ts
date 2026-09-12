@@ -19,8 +19,36 @@ function significantWords(name: string): string[] {
   );
 }
 
+// Cheap, local singular/plural stemming (no dictionary, no AI — just the
+// common English patterns) so "egg" in an ingredient name still matches a
+// step that says "eggs", and "tomatoes" in a step still matches an
+// ingredient named "Tomato". Deliberately conservative: only ever adds or
+// strips a trailing "s"/"es", and never shortens below 3 letters.
+function wordVariants(word: string): string[] {
+  const variants = new Set([word]);
+  if (word.endsWith("es") && word.length > 4) variants.add(word.slice(0, -2));
+  if (word.endsWith("s") && word.length > 3) variants.add(word.slice(0, -1));
+  if (!word.endsWith("s")) {
+    variants.add(word + "s");
+    if (/(?:[sxz]|[cs]h)$/.test(word)) variants.add(word + "es");
+  }
+  return Array.from(variants);
+}
+
+// Finds whether (a singular/plural variant of) `word` appears in the text,
+// returning the exact substring that actually matched — so a caller that
+// needs to highlight or key off the real text (not the ingredient's own
+// spelling) gets the right string.
+function findWordMatch(word: string, lowerHaystack: string): string | null {
+  for (const variant of wordVariants(word)) {
+    const match = lowerHaystack.match(new RegExp(`\\b${escapeRegExp(variant)}\\b`, "i"));
+    if (match) return match[0];
+  }
+  return null;
+}
+
 function wordAppears(word: string, lowerHaystack: string): boolean {
-  return new RegExp(`\\b${escapeRegExp(word)}\\b`, "i").test(lowerHaystack);
+  return findWordMatch(word, lowerHaystack) != null;
 }
 
 function labelIsMentioned(label: string, lowerBody: string): boolean {
@@ -71,7 +99,8 @@ export function mentionedWordMap<T extends { id: string; name: string }>(
   const map = new Map<string, T>();
   for (const ing of ingredients) {
     for (const w of significantWords(ing.name)) {
-      if (!map.has(w) && wordAppears(w, lowerBody)) map.set(w, ing);
+      const matched = findWordMatch(w, lowerBody);
+      if (matched && !map.has(matched)) map.set(matched, ing);
     }
   }
   return map;
