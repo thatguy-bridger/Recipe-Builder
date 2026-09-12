@@ -20,9 +20,11 @@ import { formatDuration, parseMinutesText } from "@/lib/duration";
 import {
   findMentionedCategories,
   findMentionedIngredients,
+  mentionedWordMap,
   mentionedWords,
   splitByTerms,
 } from "@/lib/ingredientMatch";
+import { formatIngredientQuantity } from "@/lib/ingredients";
 
 type SubTimer = { stepId: string; total: number; remaining: number; running: boolean };
 
@@ -60,6 +62,8 @@ export function CookMode({
   const [current, setCurrent] = useState(0);
   const [extraSteps, setExtraSteps] = useState(1); // additional steps beyond the guaranteed neighbors
   const [showServings, setShowServings] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showInlineAmounts, setShowInlineAmounts] = useState(true);
   const dragging = useRef(false);
   const asideRef = useRef<HTMLElement>(null);
   const ingredientsContentRef = useRef<HTMLDivElement>(null);
@@ -281,6 +285,13 @@ export function CookMode({
     () => (currentStep ? mentionedWords(currentStep.body, ingredients) : []),
     [currentStep, ingredients]
   );
+  // Which ingredient each highlighted word came from, so its quantity can
+  // be shown right above the word in the step text — no need to glance
+  // back at the sidebar list mid-step.
+  const highlightWordToIngredient = useMemo(
+    () => (currentStep ? mentionedWordMap(currentStep.body, ingredients) : new Map()),
+    [currentStep, ingredients]
+  );
 
   return (
     <div className="relative flex w-full" style={buildIsolatedThemeStyle(ownerTheme)}>
@@ -306,13 +317,35 @@ export function CookMode({
             <h2 className="font-serif text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               Ingredients
             </h2>
-            <button
-              type="button"
-              onClick={() => setShowServings((v) => !v)}
-              className="rounded-full border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
-            >
-              {showServings ? "Hide servings ▴" : "Show servings ▾"}
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((v) => !v)}
+                className="rounded-full border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
+              >
+                Recipe settings {settingsOpen ? "▴" : "▾"}
+              </button>
+              {settingsOpen && (
+                <div className="absolute right-0 top-full z-20 mt-1 flex w-56 flex-col gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-xs shadow-[var(--shadow)]">
+                  <label className="flex items-center justify-between gap-2">
+                    <span>Show servings</span>
+                    <input
+                      type="checkbox"
+                      checked={showServings}
+                      onChange={(e) => setShowServings(e.target.checked)}
+                    />
+                  </label>
+                  <label className="flex items-center justify-between gap-2">
+                    <span>Show amounts in steps</span>
+                    <input
+                      type="checkbox"
+                      checked={showInlineAmounts}
+                      onChange={(e) => setShowInlineAmounts(e.target.checked)}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
           </div>
           <ServingScaler
             baseServings={baseServings}
@@ -489,18 +522,41 @@ export function CookMode({
                       </span>
                       <p className={isCurrent ? "text-lg leading-relaxed" : "text-sm leading-relaxed"}>
                         {isCurrent
-                          ? splitByTerms(step.body, highlightTerms).map((seg, si) =>
-                              seg.matched ? (
-                                <mark
-                                  key={si}
-                                  className="rounded bg-[var(--accent-soft)] px-0.5 text-[var(--accent)]"
-                                >
-                                  {seg.text}
-                                </mark>
-                              ) : (
-                                <span key={si}>{seg.text}</span>
-                              )
-                            )
+                          ? (() => {
+                              const segments = splitByTerms(step.body, highlightTerms);
+                              // If a term is mentioned more than once in this step, its
+                              // total amount would be split across those mentions — showing
+                              // the full quantity at each occurrence would overstate it, so
+                              // skip the quantity box for repeated terms entirely.
+                              const termCounts = new Map<string, number>();
+                              for (const seg of segments) {
+                                if (!seg.matched) continue;
+                                const key = seg.text.toLowerCase();
+                                termCounts.set(key, (termCounts.get(key) ?? 0) + 1);
+                              }
+                              return segments.map((seg, si) => {
+                                if (!seg.matched) return <span key={si}>{seg.text}</span>;
+                                const key = seg.text.toLowerCase();
+                                const matchedIngredient = highlightWordToIngredient.get(key);
+                                const quantity =
+                                  showInlineAmounts && matchedIngredient && termCounts.get(key) === 1
+                                    ? formatIngredientQuantity(matchedIngredient)
+                                    : "";
+                                return (
+                                  <mark
+                                    key={si}
+                                    className="inline-flex items-center gap-1 rounded bg-[var(--accent-soft)] px-0.5 align-bottom text-[var(--accent)]"
+                                  >
+                                    {quantity && (
+                                      <span className="whitespace-nowrap rounded bg-[var(--bg-muted)] px-1 py-0.5 text-[10px] font-semibold leading-none text-[var(--accent)]">
+                                        {quantity}
+                                      </span>
+                                    )}
+                                    <span>{seg.text}</span>
+                                  </mark>
+                                );
+                              });
+                            })()
                           : step.body}
                       </p>
                     </div>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   findMentionedCategories,
   findMentionedIngredients,
+  mentionedWordMap,
   mentionedWords,
   splitByTerms,
   textIsMentioned,
@@ -86,6 +87,21 @@ describe("mentionedWords", () => {
     const ingredients = [ing("1", "Cream Cheese"), ing("2", "Whipped Cheese")];
     const words = mentionedWords("Add the cheese now.", ingredients);
     expect(words).toEqual(["cheese"]);
+  });
+});
+
+describe("mentionedWordMap", () => {
+  it("maps each matched word to the ingredient it came from", () => {
+    const ingredients = [ing("1", "Large Strawberries"), ing("2", "Ricotta")];
+    const map = mentionedWordMap("Wash the strawberries.", ingredients);
+    expect(map.get("strawberries")?.id).toBe("1");
+    expect(map.size).toBe(1);
+  });
+
+  it("keeps the first ingredient when a word is shared", () => {
+    const ingredients = [ing("1", "Cream Cheese"), ing("2", "Whipped Cheese")];
+    const map = mentionedWordMap("Add the cheese now.", ingredients);
+    expect(map.get("cheese")?.id).toBe("1");
   });
 });
 

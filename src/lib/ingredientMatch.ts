@@ -56,14 +56,25 @@ export function mentionedWords<T extends { id: string; name: string }>(
   stepBody: string,
   ingredients: T[]
 ): string[] {
+  return Array.from(mentionedWordMap(stepBody, ingredients).keys());
+}
+
+// Same matching as mentionedWords, but keeps which ingredient each matched
+// word came from — so a caller (e.g. Cook Mode's inline highlighting) can
+// show that ingredient's quantity right next to the word in the step text,
+// not just in the sidebar list. Keyed by the lowercased matched word.
+export function mentionedWordMap<T extends { id: string; name: string }>(
+  stepBody: string,
+  ingredients: T[]
+): Map<string, T> {
   const lowerBody = stepBody.toLowerCase();
-  const words = new Set<string>();
+  const map = new Map<string, T>();
   for (const ing of ingredients) {
     for (const w of significantWords(ing.name)) {
-      if (wordAppears(w, lowerBody)) words.add(w);
+      if (!map.has(w) && wordAppears(w, lowerBody)) map.set(w, ing);
     }
   }
-  return Array.from(words);
+  return map;
 }
 
 // Which categories are worth highlighting, given a step body and the set of
