@@ -92,6 +92,10 @@ export function CookMode({
   // algorithm never matched at all — keyed by step+word (no original
   // ingredient to tie it to). Merged on top of the algorithmic matches.
   const [manualAdditions, setManualAdditions] = useState(() => new Map(initialManualAdditions));
+  // The servings-and-unit-scaled ingredient list, reported up by
+  // ServingScaler — used for matching/highlighting so inline step
+  // quantities track the current serving size, not just the sidebar list.
+  const [scaledIngredients, setScaledIngredients] = useState<Ingredient[]>(ingredients);
   const [preferredNameByWord] = useState(() => new Map(initialPreferredNameByWord));
   // Which word currently has its picker open (only one at a time). `mode`
   // "correct" fixes an existing (already-downvoted) match; "new" suggests a
@@ -237,7 +241,14 @@ export function CookMode({
   // the recipe's total time when one is set. When the recipe has no total
   // time, don't start a stopwatch on its own — leave a blank field so the
   // cook can type in a number of minutes to count down from instead.
-  const { timer: mainTimer, startFor, pause: pauseMain, resume: resumeMain, reset: resetMain } = useCookTimer();
+  const {
+    timer: mainTimer,
+    startFor,
+    pause: pauseMain,
+    resume: resumeMain,
+    reset: resetMain,
+    setRemaining,
+  } = useCookTimer();
   const totalSeconds = totalMinutes ? (() => {
     const minutes = parseMinutesText(totalMinutes);
     return minutes != null ? Math.round(minutes * 60) : null;
@@ -257,6 +268,23 @@ export function CookMode({
   };
   const mainRemaining = remainingSeconds(mainTimer);
   const mainDone = mainTimer.totalSeconds != null && mainRemaining === 0;
+
+  // Clicking the running timer opens a plain "minutes left" edit — for
+  // when a cook wants to correct it (misjudged, got interrupted, etc.)
+  // without resetting the whole thing.
+  const [editingTimer, setEditingTimer] = useState(false);
+  const [timerEditValue, setTimerEditValue] = useState("");
+  const openTimerEdit = () => {
+    setTimerEditValue(String(Math.ceil(mainRemaining / 60)));
+    setEditingTimer(true);
+  };
+  const commitTimerEdit = () => {
+    const minutes = Number(timerEditValue);
+    if (Number.isFinite(minutes) && minutes > 0) {
+      setRemaining(Math.round(minutes * 60));
+    }
+    setEditingTimer(false);
+  };
 
   // A separate, page-local countdown for whichever step is current, if that
   // step has an optional timer set. Restarts fresh every time the current
@@ -327,8 +355,8 @@ export function CookMode({
   // ingredient match is more specific/accurate and takes priority.
   const currentStep = steps[current];
   const mentionedIngredients = useMemo(
-    () => (currentStep ? findMentionedIngredients(currentStep.body, ingredients) : []),
-    [currentStep, ingredients]
+    () => (currentStep ? findMentionedIngredients(currentStep.body, scaledIngredients) : []),
+    [currentStep, scaledIngredients]
   );
   const highlightedIds = useMemo(
     () => new Set(mentionedIngredients.map((i) => i.id)),
@@ -337,9 +365,9 @@ export function CookMode({
   const highlightedCategories = useMemo(
     () =>
       currentStep
-        ? new Set(findMentionedCategories(currentStep.body, ingredients, highlightedIds))
+        ? new Set(findMentionedCategories(currentStep.body, scaledIngredients, highlightedIds))
         : new Set<string>(),
-    [currentStep, ingredients, highlightedIds]
+    [currentStep, scaledIngredients, highlightedIds]
   );
 
   // When the current step mentions an ingredient that isn't already visible
@@ -361,8 +389,8 @@ export function CookMode({
   // be shown right above the word in the step text — no need to glance
   // back at the sidebar list mid-step.
   const rawWordToIngredient = useMemo(
-    () => (currentStep ? mentionedWordMap(currentStep.body, ingredients) : new Map()),
-    [currentStep, ingredients]
+    () => (currentStep ? mentionedWordMap(currentStep.body, scaledIngredients) : new Map()),
+    [currentStep, scaledIngredients]
   );
   // Apply feedback on top of the raw match: an exact correction wins first,
   // then a globally-learned preference (same word corrected/suggested to an
@@ -377,7 +405,7 @@ export function CookMode({
       const key = matchFeedbackKey(currentStep.id, ing.id, word);
       const correctedId = corrections.get(key);
       if (correctedId) {
-        const correctedIngredient = ingredients.find((i) => i.id === correctedId);
+        const correctedIngredient = scaledIngredients.find((i) => i.id === correctedId);
         if (correctedIngredient) {
           resolved.set(word, correctedIngredient);
           continue;
@@ -395,7 +423,7 @@ export function CookMode({
 
         const preferredName = preferredNameByWord.get(word);
         const preferredIngredient = preferredName
-          ? ingredients.find((i) => i.name.trim().toLowerCase() === preferredName)
+          ? scaledIngredients.find((i) => i.name.trim().toLowerCase() === preferredName)
           : undefined;
         if (preferredIngredient) {
           resolved.set(word, preferredIngredient);
@@ -407,7 +435,7 @@ export function CookMode({
     for (const [key, ingredientId] of manualAdditions) {
       const [stepId, word] = key.split("::");
       if (stepId !== currentStep.id) continue;
-      const ingredient = ingredients.find((i) => i.id === ingredientId);
+      const ingredient = scaledIngredients.find((i) => i.id === ingredientId);
       if (ingredient) resolved.set(word, ingredient);
     }
     return resolved;
@@ -419,7 +447,7 @@ export function CookMode({
     corrections,
     manualAdditions,
     preferredNameByWord,
-    ingredients,
+    scaledIngredients,
     pendingCorrection,
   ]);
   const highlightTerms = useMemo(
@@ -558,6 +586,7 @@ export function CookMode({
             showServings={showServings}
             highlightedIds={highlightedIds}
             highlightedCategories={highlightedCategories}
+            onScaledIngredientsChange={setScaledIngredients}
           />
           </div>
         </div>
@@ -655,13 +684,33 @@ export function CookMode({
                       : "border-[var(--accent)] bg-[var(--accent-soft)]"
                   }`}
                 >
-                  <span
-                    className={`text-3xl font-bold leading-none tabular-nums ${
-                      mainDone ? "text-[var(--danger)]" : "text-[var(--accent)]"
-                    }`}
-                  >
-                    {mainDone ? "Time's up!" : formatDuration(mainRemaining)}
-                  </span>
+                  {editingTimer ? (
+                    <input
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      autoFocus
+                      value={timerEditValue}
+                      onChange={(e) => setTimerEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitTimerEdit();
+                        if (e.key === "Escape") setEditingTimer(false);
+                      }}
+                      onBlur={commitTimerEdit}
+                      className="w-20 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-2xl font-bold tabular-nums text-[var(--accent)]"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      title="Click to change the time left"
+                      onClick={openTimerEdit}
+                      className={`text-3xl font-bold leading-none tabular-nums hover:underline ${
+                        mainDone ? "text-[var(--danger)]" : "text-[var(--accent)]"
+                      }`}
+                    >
+                      {mainDone ? "Time's up!" : formatDuration(mainRemaining)}
+                    </button>
+                  )}
                   <div className="flex flex-col gap-1">
                     <button
                       type="button"
@@ -699,7 +748,7 @@ export function CookMode({
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-[30vh]">
             {pinnedSteps.length > 0 && (
               <div className="flex flex-col gap-3">
                 {pinnedSteps.map((step) => {

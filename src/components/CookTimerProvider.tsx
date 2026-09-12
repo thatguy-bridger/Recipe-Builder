@@ -50,12 +50,14 @@ const CookTimerContext = createContext<{
   pause: () => void;
   resume: () => void;
   reset: () => void;
+  setRemaining: (seconds: number) => void;
 }>({
   timer: initialState,
   startFor: () => {},
   pause: () => {},
   resume: () => {},
   reset: () => {},
+  setRemaining: () => {},
 });
 
 function readStored(): StoredTimer | null {
@@ -196,8 +198,25 @@ export function CookTimerProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // A cook typing in a corrected time remaining — treated as starting a
+  // fresh countdown from that value, same as picking a manual timer length.
+  const setRemaining = useCallback((seconds: number) => {
+    setTimer((t) => {
+      if (!t.recipeId) return t;
+      writeStored({
+        recipeId: t.recipeId,
+        recipeTitle: t.recipeTitle ?? "",
+        totalSeconds: seconds,
+        elapsedSeconds: 0,
+        running: true,
+        lastActiveAt: Date.now(),
+      });
+      return { ...t, totalSeconds: seconds, elapsedSeconds: 0, running: true };
+    });
+  }, []);
+
   return (
-    <CookTimerContext.Provider value={{ timer, startFor, pause, resume, reset }}>
+    <CookTimerContext.Provider value={{ timer, startFor, pause, resume, reset, setRemaining }}>
       {children}
     </CookTimerContext.Provider>
   );

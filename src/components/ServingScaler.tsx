@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Ingredient } from "@/types/recipe";
 import { formatIngredientQuantity } from "@/lib/ingredients";
 import { convertQuantity, isConvertibleUnit } from "@/lib/unitConversion";
@@ -18,6 +18,7 @@ export function ServingScaler({
   showServings = true,
   highlightedIds,
   highlightedCategories,
+  onScaledIngredientsChange,
 }: {
   baseServings: number;
   servingUnit?: string;
@@ -30,6 +31,10 @@ export function ServingScaler({
   // and there's no specific matching ingredient, but there's a "Cheese
   // Options" category.
   highlightedCategories?: Set<string>;
+  // Reports the current servings/unit-scaled ingredient list back up, so a
+  // caller (Cook Mode) can show the same live amounts inline in step text,
+  // not just in this sidebar list.
+  onScaledIngredientsChange?: (ingredients: Ingredient[]) => void;
 }) {
   const [servings, setServings] = useState(baseServings || 1);
   const factor = servings / (baseServings || 1);
@@ -49,6 +54,11 @@ export function ServingScaler({
       }),
     [ingredients, factor, unitSystem]
   );
+
+  useEffect(() => {
+    onScaledIngredientsChange?.(scaled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scaled]);
 
   // Group by category. Categories appear in the order they're first seen;
   // uncategorized items are listed last with no heading at all.
