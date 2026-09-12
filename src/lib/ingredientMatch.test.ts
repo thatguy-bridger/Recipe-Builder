@@ -78,6 +78,15 @@ describe("findMentionedIngredients", () => {
     expect(findMentionedIngredients("Dice the tomato finely.", ingredients).map((i) => i.id)).toEqual(["1"]);
   });
 
+  it("matches a two-word ingredient name as one phrase, not crediting a shared word to a different ingredient", () => {
+    // "baking" is shared between these two ingredient names — without
+    // phrase matching, a step that only mentions "baking powder" would
+    // wrongly also credit "Baking Soda" just because it shares that word.
+    const ingredients = [ing("1", "Baking Powder"), ing("2", "Baking Soda")];
+    const result = findMentionedIngredients("Add the baking powder and mix.", ingredients);
+    expect(result.map((i) => i.id)).toEqual(["1"]);
+  });
+
   it("does not strip a trailing s from words too short to stem safely", () => {
     // "Gas" is only 3 letters — stripping its trailing "s" would produce a
     // nonsense 2-letter word ("ga"), so it should still match "gas" itself
@@ -121,6 +130,34 @@ describe("mentionedWordMap", () => {
     const ingredients = [ing("1", "Cream Cheese"), ing("2", "Whipped Cheese")];
     const map = mentionedWordMap("Add the cheese now.", ingredients);
     expect(map.get("cheese")?.id).toBe("1");
+  });
+
+  it("maps a matched two-word phrase to a single entry, not one per word", () => {
+    const ingredients = [ing("1", "Baking Powder"), ing("2", "Baking Soda")];
+    const map = mentionedWordMap("Add the baking powder and mix.", ingredients);
+    expect(map.size).toBe(1);
+    expect(map.get("baking powder")?.id).toBe("1");
+  });
+
+  it("still matches a phrase ingredient by singular/plural on its last word", () => {
+    const ingredients = [ing("1", "Chocolate Chip")];
+    const map = mentionedWordMap("Fold in the chocolate chips.", ingredients);
+    expect(map.get("chocolate chips")?.id).toBe("1");
+  });
+
+  it("matches a trailing word pair from a longer name as one phrase", () => {
+    // The full name never appears verbatim, but "chicken breast" does — it
+    // should highlight as one phrase, not "chicken" and "breast" separately.
+    const ingredients = [ing("1", "Boneless, Skinless Chicken Breast")];
+    const map = mentionedWordMap("Pat the chicken breast dry with paper towels.", ingredients);
+    expect(map.size).toBe(1);
+    expect(map.get("chicken breast")?.id).toBe("1");
+  });
+
+  it("only lights up once for a name whose words appear but not contiguously", () => {
+    const ingredients = [ing("1", "Salt and Pepper")];
+    const map = mentionedWordMap("Add salt and black pepper to taste.", ingredients);
+    expect(map.size).toBe(1);
   });
 });
 

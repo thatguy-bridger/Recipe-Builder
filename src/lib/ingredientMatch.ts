@@ -51,6 +51,47 @@ function wordAppears(word: string, lowerHaystack: string): boolean {
   return findWordMatch(word, lowerHaystack) != null;
 }
 
+// Tries a sequence of words as one contiguous phrase (allowing the last
+// word to be singular/plural), returning the actual matched substring.
+function tryPhrase(words: string[], lowerHaystack: string): string | null {
+  if (words.length < 2) return null;
+  const last = words[words.length - 1].toLowerCase();
+  const lead = words
+    .slice(0, -1)
+    .map((w) => escapeRegExp(w.toLowerCase()))
+    .join("\\s+");
+  for (const variant of wordVariants(last)) {
+    const pattern = `${lead}\\s+${escapeRegExp(variant)}`;
+    const match = lowerHaystack.match(new RegExp(`\\b${pattern}\\b`, "i"));
+    if (match) return match[0];
+  }
+  return null;
+}
+
+// For a multi-word ingredient name, tries to find it (or a meaningful
+// trailing chunk of it) together in the text as one phrase, so it
+// highlights as a single match instead of each word lighting up on its
+// own. Two cases this fixes:
+//   - "Baking Powder" and "Baking Soda" both in a recipe, step says
+//     "baking powder" — without this, "baking" alone could get credited to
+//     whichever of the two the matching loop reaches first.
+//   - "Boneless, Skinless Chicken Breast" — the full name never appears
+//     verbatim, but "chicken breast" does, and that trailing pair should
+//     highlight together rather than "chicken" and "breast" separately.
+// Tries the full name first, then progressively shorter trailing runs of
+// its significant words (longest first), stopping at the first hit.
+function findPhraseMatch(name: string, lowerHaystack: string): string | null {
+  const full = tryPhrase(name.trim().split(/\s+/), lowerHaystack);
+  if (full) return full;
+
+  const sig = significantWords(name);
+  for (let start = 0; start <= sig.length - 2; start++) {
+    const match = tryPhrase(sig.slice(start), lowerHaystack);
+    if (match) return match;
+  }
+  return null;
+}
+
 function labelIsMentioned(label: string, lowerBody: string): boolean {
   return significantWords(label).some((w) => wordAppears(w, lowerBody));
 }
@@ -69,12 +110,16 @@ export function textIsMentioned(stepBody: string, label: string): boolean {
 // from the ingredient's name (case-insensitive) rather than requiring the
 // full name — "Large Strawberries" still counts as mentioned by a step that
 // just says "strawberries". Deliberately simple rather than NLP-grade.
+//
+// Shares its resolution with mentionedWordMap below, so an ingredient whose
+// name is a full phrase found together in the text ("Baking Powder") isn't
+// ALSO credited to a different ingredient that merely shares one of those
+// words ("Baking Soda") — see mentionedWordMap for why that matters.
 export function findMentionedIngredients<T extends { id: string; name: string }>(
   stepBody: string,
   ingredients: T[]
 ): T[] {
-  const lowerBody = stepBody.toLowerCase();
-  return ingredients.filter((ing) => labelIsMentioned(ing.name, lowerBody));
+  return Array.from(new Set(mentionedWordMap(stepBody, ingredients).values()));
 }
 
 // The specific words (not full ingredient names) that actually matched in
@@ -90,17 +135,47 @@ export function mentionedWords<T extends { id: string; name: string }>(
 // Same matching as mentionedWords, but keeps which ingredient each matched
 // word came from — so a caller (e.g. Cook Mode's inline highlighting) can
 // show that ingredient's quantity right next to the word in the step text,
-// not just in the sidebar list. Keyed by the lowercased matched word.
+// not just in the sidebar list. Keyed by the lowercased matched text.
+//
+// Two passes: first, every multi-word ingredient name gets a chance to
+// match as a whole phrase ("baking powder" as one unit, not "baking" and
+// "powder" separately) — otherwise a step that says "baking powder" would
+// highlight it as two disconnected words, and if another ingredient in the
+// same recipe happens to be "Baking Soda", that word would wrongly get
+// credited to it too. Words consumed by a phrase match are then off-limits
+// for the second pass, which does the existing single-significant-word
+// matching for every ingredient that didn't match as a phrase.
 export function mentionedWordMap<T extends { id: string; name: string }>(
   stepBody: string,
   ingredients: T[]
 ): Map<string, T> {
   const lowerBody = stepBody.toLowerCase();
   const map = new Map<string, T>();
+  const consumedWords = new Set<string>();
+  const unresolved: T[] = [];
+
   for (const ing of ingredients) {
+    const phrase = findPhraseMatch(ing.name, lowerBody);
+    if (phrase) {
+      map.set(phrase, ing);
+      for (const w of phrase.toLowerCase().split(/\s+/)) consumedWords.add(w);
+    } else {
+      unresolved.push(ing);
+    }
+  }
+
+  for (const ing of unresolved) {
+    // Only the first significant word that matches — an ingredient whose
+    // words appear in the text but not contiguously (so findPhraseMatch
+    // above couldn't merge them into one phrase, e.g. "Salt and Pepper"
+    // with the "and" in the way) should still only light up once, not once
+    // per word.
     for (const w of significantWords(ing.name)) {
       const matched = findWordMatch(w, lowerBody);
-      if (matched && !map.has(matched)) map.set(matched, ing);
+      if (matched && !consumedWords.has(matched) && !map.has(matched)) {
+        map.set(matched, ing);
+        break;
+      }
     }
   }
   return map;

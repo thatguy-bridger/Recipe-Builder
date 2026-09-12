@@ -113,8 +113,10 @@ export function CookMode({
   const [activeControl, setActiveControl] = useState<string | null>(null);
   const dragging = useRef(false);
   const asideRef = useRef<HTMLElement>(null);
+  const ingredientsScrollRef = useRef<HTMLDivElement>(null);
   const ingredientsContentRef = useRef<HTMLDivElement>(null);
   const equipmentContentRef = useRef<HTMLDivElement>(null);
+  const currentStepRef = useRef<HTMLDivElement>(null);
   // Once the cook drags a handle, their choice sticks (and persists) instead
   // of being recalculated from content on every render.
   const heightManual = useRef(false);
@@ -339,6 +341,22 @@ export function CookMode({
         : new Set<string>(),
     [currentStep, ingredients, highlightedIds]
   );
+
+  // When the current step mentions an ingredient that isn't already visible
+  // in the (possibly scrolled) ingredients list, bring it into view — a
+  // cook shouldn't have to go hunting for it every time the step changes.
+  useEffect(() => {
+    const firstId = mentionedIngredients[0]?.id;
+    if (!firstId || !ingredientsScrollRef.current) return;
+    const el = ingredientsScrollRef.current.querySelector(`[data-ingredient-id="${firstId}"]`);
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [mentionedIngredients]);
+
+  // Keep the current step vertically centered as the cook moves through the
+  // recipe, instead of it landing wherever it happens to fall in the grid.
+  useEffect(() => {
+    currentStepRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [current]);
   // Which ingredient each highlighted word came from, so its quantity can
   // be shown right above the word in the step text — no need to glance
   // back at the sidebar list mid-step.
@@ -494,6 +512,7 @@ export function CookMode({
         className="sticky top-[57px] flex h-[calc(100vh-57px)] shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] text-base [container-type:inline-size]"
       >
         <div
+          ref={ingredientsScrollRef}
           style={equipment.length > 0 ? { height: ingredientsHeight } : undefined}
           className={`flex min-h-0 flex-col overflow-y-auto p-6 ${equipment.length > 0 ? "shrink-0" : "flex-1"}`}
         >
@@ -719,6 +738,7 @@ export function CookMode({
                 return (
                   <div
                     key={step.id}
+                    ref={isCurrent ? currentStepRef : undefined}
                     onClick={() => setCurrent(idx)}
                     className={`cursor-pointer rounded-[var(--radius)] border transition-all ${spanClass} ${
                       isCurrent

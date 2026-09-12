@@ -131,6 +131,7 @@ export function ServingScaler({
                 return (
                   <li
                     key={ing.id}
+                    data-ingredient-id={ing.id}
                     className={`min-w-0 break-words rounded transition-all before:mr-1 before:text-[var(--text-muted)] before:content-['·'] ${
                       isHighlighted
                         ? "-mx-1.5 bg-[var(--accent-soft)] px-1.5 py-0.5 text-lg font-medium"
