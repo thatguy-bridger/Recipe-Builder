@@ -9,7 +9,8 @@ export async function checkRateLimit(
   userId: string,
   key: string,
   max: number,
-  windowMinutes: number
+  windowMinutes: number,
+  cost = 1
 ): Promise<boolean> {
   const since = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
   const { count } = await supabase
@@ -19,8 +20,10 @@ export async function checkRateLimit(
     .eq("key", key)
     .gte("created_at", since);
 
-  if ((count ?? 0) >= max) return false;
+  if ((count ?? 0) + cost > max) return false;
 
-  await supabase.from("rate_limit_events").insert({ user_id: userId, key });
+  await supabase
+    .from("rate_limit_events")
+    .insert(Array.from({ length: cost }, () => ({ user_id: userId, key })));
   return true;
 }

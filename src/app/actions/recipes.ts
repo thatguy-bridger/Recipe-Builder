@@ -562,34 +562,30 @@ type ImportedRecipe = {
   steps?: { body: string; photo_urls?: string[]; is_pinned?: boolean; timer_minutes?: string | null }[];
 };
 
-export async function importRecipeJson(formData: FormData) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+// Accepts either one recipe object, a bare array of them, or
+// { recipes: [...] } — so pasting the output of a bulk extraction (e.g.
+// "digest this PDF of recipes") works without reshaping it first.
+function extractRecipeList(parsed: unknown): ImportedRecipe[] {
+  if (Array.isArray(parsed)) return parsed as ImportedRecipe[];
+  if (parsed && typeof parsed === "object" && Array.isArray((parsed as { recipes?: unknown }).recipes)) {
+    return (parsed as { recipes: ImportedRecipe[] }).recipes;
+  }
+  return [parsed as ImportedRecipe];
+}
 
-  const allowed = await checkRateLimit(supabase, user.id, "import", 10, 60);
-  if (!allowed) {
-    redirect(`/dashboard/import?error=${encodeURIComponent("Too many imports — try again in an hour")}`);
-  }
-
-  const raw = String(formData.get("json") || "");
-  let parsed: ImportedRecipe;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    redirect(`/dashboard/import?error=${encodeURIComponent("That's not valid JSON")}`);
-  }
-  if (!parsed || typeof parsed.title !== "string" || !parsed.title.trim()) {
-    redirect(`/dashboard/import?error=${encodeURIComponent("Missing a recipe title")}`);
-  }
+async function importOneRecipe(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  parsed: ImportedRecipe
+): Promise<{ title: string; id?: string; error?: string }> {
+  const title = typeof parsed?.title === "string" ? parsed.title.trim() : "";
+  if (!title) return { title: parsed?.title ? String(parsed.title) : "(untitled)", error: "missing a title" };
 
   const { data: recipe, error } = await supabase
     .from("recipes")
     .insert({
-      owner_id: user.id,
-      title: titleCase(parsed.title),
+      owner_id: userId,
+      title: titleCase(title),
       description: parsed.description ?? null,
       servings: parsed.servings ?? 4,
       serving_unit: parsed.serving_unit ?? "Serving",
@@ -604,9 +600,7 @@ export async function importRecipeJson(formData: FormData) {
     .select()
     .single();
 
-  if (error || !recipe) {
-    redirect(`/dashboard/import?error=${encodeURIComponent(error?.message || "Import failed")}`);
-  }
+  if (error || !recipe) return { title, error: error?.message || "insert failed" };
 
   const ingredients = (parsed.ingredients ?? []).map((ing) => ({
     amount: ing.amount != null ? String(ing.amount) : "",
@@ -622,9 +616,59 @@ export async function importRecipeJson(formData: FormData) {
     timer_minutes: step.timer_minutes ?? "",
   }));
 
-  await writeChildren(recipe.id, ingredients, steps, []);
+  const childErrors = await writeChildren(recipe.id, ingredients, steps, []);
+  if (childErrors.length > 0) return { title, id: recipe.id, error: childErrors.join("; ") };
+  return { title, id: recipe.id };
+}
+
+export async function importRecipeJson(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const raw = String(formData.get("json") || "");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    redirect(`/dashboard/import?error=${encodeURIComponent("That's not valid JSON")}`);
+  }
+
+  const recipeList = extractRecipeList(parsed);
+  if (recipeList.length === 0) {
+    redirect(`/dashboard/import?error=${encodeURIComponent("No recipes found in that JSON")}`);
+  }
+
+  // Rate-limited per recipe, not per submission, so pasting a batch of 20
+  // doesn't let someone bypass the invite/import abuse guard in one shot —
+  // but the whole batch is checked up front so it fails before writing
+  // anything rather than partway through.
+  const allowed = await checkRateLimit(supabase, user.id, "import", 10, 60, recipeList.length);
+  if (!allowed) {
+    redirect(`/dashboard/import?error=${encodeURIComponent("Too many imports — try again in an hour")}`);
+  }
+
+  const results = await Promise.all(recipeList.map((r) => importOneRecipe(supabase, user.id, r)));
+  const succeeded = results.filter((r) => !r.error);
+  const failed = results.filter((r) => r.error);
+
   revalidatePath("/dashboard");
-  redirect(`/recipes/${recipe.id}/edit`);
+
+  // A single, fully-successful import keeps the old UX of dropping you
+  // straight into the edit form to review it. A batch (or any failures)
+  // goes back to the import page with a summary instead.
+  if (recipeList.length === 1 && succeeded.length === 1 && succeeded[0].id) {
+    redirect(`/recipes/${succeeded[0].id}/edit`);
+  }
+
+  const params = new URLSearchParams();
+  params.set("imported", String(succeeded.length));
+  if (failed.length > 0) {
+    params.set("failed", failed.map((f) => `${f.title}: ${f.error}`).join(" | "));
+  }
+  redirect(`/dashboard/import?${params.toString()}`);
 }
 
 export async function toggleFavorite(recipeId: string, isFavorite: boolean) {

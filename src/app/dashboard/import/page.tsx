@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { importRecipeJson } from "@/app/actions/recipes";
@@ -7,9 +8,9 @@ import { ImportPrefill } from "@/components/ImportPrefill";
 export default async function ImportRecipePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; imported?: string; failed?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, imported, failed } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -29,14 +30,39 @@ export default async function ImportRecipePage({
       </p>
       <p className="mb-6 text-sm text-[var(--text-muted)]">
         Prefer to paste JSON by hand? You can do that below too — either exported from Recipe
-        Boxed elsewhere, or matching the same shape. The recipe is created as a draft under your
-        account, so you can review it before publishing.
+        Boxed elsewhere, or matching the same shape. Paste a single recipe object, a bare array of
+        them, or <code className="rounded bg-[var(--bg-muted)] px-1 py-0.5">{`{ "recipes": [...] }`}</code>{" "}
+        to import many at once (handy after asking Claude to digest a whole PDF of recipes into
+        this shape). Everything is created as a draft under your account, so you can review before
+        publishing.
       </p>
 
       {error && (
         <p className="mb-4 rounded-lg bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">
           {error}
         </p>
+      )}
+
+      {imported && (
+        <p className="mb-4 rounded-lg bg-[var(--success)]/10 px-3 py-2 text-sm text-[var(--success)]">
+          Imported {imported} recipe{imported === "1" ? "" : "s"} as draft
+          {imported === "1" ? "" : "s"}.{" "}
+          <Link href="/dashboard" className="underline">
+            View them on your dashboard
+          </Link>
+          .
+        </p>
+      )}
+
+      {failed && (
+        <div className="mb-4 rounded-lg bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">
+          <p className="mb-1 font-medium">Some recipes couldn&apos;t be imported:</p>
+          <ul className="list-disc pl-5">
+            {failed.split(" | ").map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <ImportPrefill />
@@ -46,7 +72,7 @@ export default async function ImportRecipePage({
           name="json"
           required
           rows={16}
-          placeholder='{"title": "...", "ingredients": [...], "steps": [...]}'
+          placeholder='{"title": "...", "ingredients": [...], "steps": [...]}  — or an array of these to import many at once'
           className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 font-mono text-xs outline-none focus:border-[var(--accent)]"
         />
         <SubmitButton
