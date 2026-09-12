@@ -71,7 +71,7 @@ export function CookMode({
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [ingredientsHeight, setIngredientsHeight] = useState(360);
   const [current, setCurrent] = useState(0);
-  const [extraSteps, setExtraSteps] = useState(1); // additional steps beyond the guaranteed neighbors
+  const [extraSteps, setExtraSteps] = useState(9999); // additional steps beyond the guaranteed neighbors; defaults to showing all
   const [showServings, setShowServings] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showInlineAmounts, setShowInlineAmounts] = useState(true);
