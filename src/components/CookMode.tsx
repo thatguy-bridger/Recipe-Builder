@@ -66,6 +66,10 @@ export function CookMode({
 }) {
   const splitStorageKey = `cookmode-split-${recipeId}`;
   const widthStorageKey = `cookmode-width-${recipeId}`;
+  // Not per-recipe — a cook's servings/amounts display preference should
+  // stay the same everywhere they cook, not reset on every new recipe.
+  const showServingsStorageKey = "cookmode-show-servings";
+  const showInlineAmountsStorageKey = "cookmode-show-inline-amounts";
 
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [ingredientsHeight, setIngredientsHeight] = useState(360);
@@ -143,6 +147,20 @@ export function CookMode({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipeId]);
+
+  // Restore the cook's servings/amounts display preference — same for
+  // every recipe, so it's read once on mount rather than keyed by recipeId.
+  useEffect(() => {
+    try {
+      const storedShowServings = localStorage.getItem(showServingsStorageKey);
+      if (storedShowServings != null) setShowServings(storedShowServings === "true");
+      const storedShowInlineAmounts = localStorage.getItem(showInlineAmountsStorageKey);
+      if (storedShowInlineAmounts != null) setShowInlineAmounts(storedShowInlineAmounts === "true");
+    } catch {
+      // localStorage unavailable — the toggles just won't persist this session.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-fit the ingredients/equipment split to how much content each
   // actually has, instead of a fixed 50/50, unless the cook has manually
@@ -436,6 +454,38 @@ export function CookMode({
     () => new Set(mentionedIngredients.map((i) => i.id)),
     [mentionedIngredients]
   );
+
+  // When a step highlights several ingredients scattered too far apart to
+  // all be visible in the sidebar at once, temporarily pull them to the top
+  // of the list together — otherwise a cook would have to scroll back and
+  // forth mid-step to see all of them. Reset (and re-measured in the
+  // ingredients' normal order) every time the step changes; only flips on
+  // once actually confirmed too far apart, so it never fights itself.
+  const [regroupHighlighted, setRegroupHighlighted] = useState(false);
+  useEffect(() => {
+    setRegroupHighlighted(false);
+  }, [currentStep?.id]);
+  useEffect(() => {
+    if (regroupHighlighted) return;
+    const container = ingredientsScrollRef.current;
+    if (!container || highlightedIds.size < 2) return;
+    const rects = Array.from(highlightedIds)
+      .map((id) => container.querySelector(`[data-ingredient-id="${id}"]`))
+      .filter((el): el is Element => el != null)
+      .map((el) => el.getBoundingClientRect());
+    if (rects.length < 2) return;
+    const span = Math.max(...rects.map((r) => r.bottom)) - Math.min(...rects.map((r) => r.top));
+    if (span > container.getBoundingClientRect().height) setRegroupHighlighted(true);
+  }, [highlightedIds, regroupHighlighted]);
+  // The ingredient list ServingScaler renders, reordered (highlighted
+  // first) only while regroupHighlighted is active.
+  const displayIngredients = useMemo(() => {
+    if (!regroupHighlighted) return ingredients;
+    const highlighted = ingredients.filter((i) => highlightedIds.has(i.id));
+    const rest = ingredients.filter((i) => !highlightedIds.has(i.id));
+    return [...highlighted, ...rest];
+  }, [ingredients, regroupHighlighted, highlightedIds]);
+
   const highlightedCategories = useMemo(
     () =>
       currentStep
@@ -569,7 +619,14 @@ export function CookMode({
                     <input
                       type="checkbox"
                       checked={showServings}
-                      onChange={(e) => setShowServings(e.target.checked)}
+                      onChange={(e) => {
+                        setShowServings(e.target.checked);
+                        try {
+                          localStorage.setItem(showServingsStorageKey, String(e.target.checked));
+                        } catch {
+                          // ignore
+                        }
+                      }}
                     />
                   </label>
                   <label className="flex items-center justify-between gap-2">
@@ -577,7 +634,14 @@ export function CookMode({
                     <input
                       type="checkbox"
                       checked={showInlineAmounts}
-                      onChange={(e) => setShowInlineAmounts(e.target.checked)}
+                      onChange={(e) => {
+                        setShowInlineAmounts(e.target.checked);
+                        try {
+                          localStorage.setItem(showInlineAmountsStorageKey, String(e.target.checked));
+                        } catch {
+                          // ignore
+                        }
+                      }}
                     />
                   </label>
                 </div>
@@ -587,7 +651,7 @@ export function CookMode({
           <ServingScaler
             baseServings={baseServings}
             servingUnit={servingUnit}
-            ingredients={ingredients}
+            ingredients={displayIngredients}
             showServings={showServings}
             highlightedIds={highlightedIds}
             highlightedCategories={highlightedCategories}
