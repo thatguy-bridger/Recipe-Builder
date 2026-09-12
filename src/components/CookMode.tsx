@@ -107,6 +107,10 @@ export function CookMode({
     setPendingCorrection(next);
     setPickerValue("");
   }, []);
+  // The thumbs popover and the "+" suggestion button both only appear on
+  // hover, which doesn't exist on a touchscreen — so a tap on the word
+  // itself toggles the same visibility a mouse hover would give it.
+  const [activeControl, setActiveControl] = useState<string | null>(null);
   const dragging = useRef(false);
   const asideRef = useRef<HTMLElement>(null);
   const ingredientsContentRef = useRef<HTMLDivElement>(null);
@@ -448,6 +452,7 @@ export function CookMode({
   const handleSuggestNew = useCallback(
     (stepId: string, word: string, ingredientId: string) => {
       setPendingCorrection(null);
+      setActiveControl(null);
       setManualAdditions((m) => new Map(m).set(manualAdditionKey(stepId, word), ingredientId));
       submitIngredientMatchFeedback({
         recipeId,
@@ -734,8 +739,18 @@ export function CookMode({
                                           pendingCorrection?.mode === "new" &&
                                           pendingCorrection.stepId === step.id &&
                                           pendingCorrection.word === lower;
+                                        const controlKey = `new:${step.id}:${lower}`;
+                                        const isTapActive = activeControl === controlKey;
                                         return (
-                                          <span key={ti} className="group/newword relative">
+                                          <span
+                                            key={ti}
+                                            className="group/newword relative"
+                                            onClick={(e) => {
+                                              if (isPendingNew) return;
+                                              e.stopPropagation();
+                                              setActiveControl((c) => (c === controlKey ? null : controlKey));
+                                            }}
+                                          >
                                             {tok}
                                             {isPendingNew ? (
                                               <span
@@ -768,7 +783,10 @@ export function CookMode({
                                                 </button>
                                                 <button
                                                   type="button"
-                                                  onClick={() => setPendingCorrection(null)}
+                                                  onClick={() => {
+                                                    setPendingCorrection(null);
+                                                    setActiveControl(null);
+                                                  }}
                                                   className="rounded-full px-1.5 py-0.5 leading-none hover:bg-[var(--bg-muted)]"
                                                 >
                                                   ✕
@@ -780,6 +798,7 @@ export function CookMode({
                                                 title="Suggest this should link to an ingredient"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
+                                                  setActiveControl(null);
                                                   openPicker({
                                                     mode: "new",
                                                     stepId: step.id,
@@ -787,7 +806,9 @@ export function CookMode({
                                                     word: lower,
                                                   });
                                                 }}
-                                                className="absolute -top-4 left-1/2 hidden h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] text-[10px] leading-none text-[var(--text-muted)] shadow-[var(--shadow)] hover:text-[var(--accent)] group-hover/newword:flex"
+                                                className={`absolute -top-4 left-1/2 h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] text-[10px] leading-none text-[var(--text-muted)] shadow-[var(--shadow)] hover:text-[var(--accent)] group-hover/newword:flex ${
+                                                  isTapActive ? "flex" : "hidden"
+                                                }`}
                                               >
                                                 +
                                               </button>
@@ -817,9 +838,18 @@ export function CookMode({
                                   pendingCorrection?.mode === "correct" &&
                                   pendingCorrection.stepId === step.id &&
                                   pendingCorrection.word === key;
+                                const markControlKey = matchedIngredient
+                                  ? `mark:${step.id}:${key}`
+                                  : null;
+                                const isMarkTapActive = markControlKey !== null && activeControl === markControlKey;
                                 return (
                                   <mark
                                     key={si}
+                                    onClick={(e) => {
+                                      if (isBeingCorrected || !markControlKey) return;
+                                      e.stopPropagation();
+                                      setActiveControl((c) => (c === markControlKey ? null : markControlKey));
+                                    }}
                                     className="group/word relative inline-flex items-center gap-1 rounded bg-[var(--accent-soft)] px-0.5 align-bottom text-[var(--accent)]"
                                   >
                                     {quantity && (
@@ -867,12 +897,17 @@ export function CookMode({
                                       </span>
                                     ) : (
                                       matchedIngredient && (
-                                        <span className="pointer-events-none absolute -top-8 left-1/2 z-30 hidden -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs shadow-[var(--shadow)] group-hover/word:pointer-events-auto group-hover/word:flex">
+                                        <span
+                                          className={`absolute -top-8 left-1/2 z-30 -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs shadow-[var(--shadow)] group-hover/word:pointer-events-auto group-hover/word:flex ${
+                                            isMarkTapActive ? "flex" : "pointer-events-none hidden"
+                                          }`}
+                                        >
                                           <button
                                             type="button"
                                             title="This is matching correctly"
                                             onClick={(e) => {
                                               e.stopPropagation();
+                                              setActiveControl(null);
                                               handleVote(step.id, matchedIngredient.id, key, "up");
                                             }}
                                             className={`rounded-full px-1.5 py-0.5 leading-none hover:bg-[var(--bg-muted)] ${
@@ -886,6 +921,7 @@ export function CookMode({
                                             title="Stop matching this"
                                             onClick={(e) => {
                                               e.stopPropagation();
+                                              setActiveControl(null);
                                               handleVote(step.id, matchedIngredient.id, key, "down");
                                             }}
                                             className={`rounded-full px-1.5 py-0.5 leading-none hover:bg-[var(--bg-muted)] ${
