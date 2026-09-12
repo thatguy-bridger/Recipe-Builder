@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { titleCase } from "@/lib/text";
 import { parseFraction } from "@/lib/fractions";
-import { checkRateLimit } from "@/lib/rateLimit";
+import { checkRateLimit, reserveRateLimitSlots } from "@/lib/rateLimit";
 
 type IngredientInput = { amount: string; unit: string; name: string; category: string; note: string };
 type StepInput = { body: string; photo_urls: string[]; is_pinned: boolean; timer_minutes: string };
@@ -641,18 +641,24 @@ export async function importRecipeJson(formData: FormData) {
     redirect(`/dashboard/import?error=${encodeURIComponent("No recipes found in that JSON")}`);
   }
 
-  // Rate-limited per recipe, not per submission, so pasting a batch of 20
-  // doesn't let someone bypass the invite/import abuse guard in one shot —
-  // but the whole batch is checked up front so it fails before writing
-  // anything rather than partway through.
-  const allowed = await checkRateLimit(supabase, user.id, "import", 10, 60, recipeList.length);
-  if (!allowed) {
-    redirect(`/dashboard/import?error=${encodeURIComponent("Too many imports — try again in an hour")}`);
-  }
+  // Rate-limited per recipe, not per submission — but a batch bigger than
+  // the whole hourly cap still gets partial credit (import what fits,
+  // report the rest as rate-limited) rather than being rejected outright,
+  // which would otherwise permanently block a single big paste (e.g. a
+  // 20-recipe PDF digest against a lower cap) even on a fresh account.
+  const allowedCount = await reserveRateLimitSlots(supabase, user.id, "import", 100, 60, recipeList.length);
+  const toImport = recipeList.slice(0, allowedCount);
+  const rateLimited = recipeList.slice(allowedCount);
 
-  const results = await Promise.all(recipeList.map((r) => importOneRecipe(supabase, user.id, r)));
+  const results = await Promise.all(toImport.map((r) => importOneRecipe(supabase, user.id, r)));
   const succeeded = results.filter((r) => !r.error);
-  const failed = results.filter((r) => r.error);
+  const failed = [
+    ...results.filter((r) => r.error),
+    ...rateLimited.map((r) => ({
+      title: typeof r?.title === "string" ? r.title : "(untitled)",
+      error: "rate-limited — try again in an hour",
+    })),
+  ];
 
   revalidatePath("/dashboard");
 
@@ -661,6 +667,10 @@ export async function importRecipeJson(formData: FormData) {
   // goes back to the import page with a summary instead.
   if (recipeList.length === 1 && succeeded.length === 1 && succeeded[0].id) {
     redirect(`/recipes/${succeeded[0].id}/edit`);
+  }
+
+  if (succeeded.length === 0 && failed.length === 0) {
+    redirect(`/dashboard/import?error=${encodeURIComponent("Too many imports — try again in an hour")}`);
   }
 
   const params = new URLSearchParams();
