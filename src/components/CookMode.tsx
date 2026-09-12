@@ -957,10 +957,10 @@ export function CookMode({
                                       e.stopPropagation();
                                       setActiveControl((c) => (c === markControlKey ? null : markControlKey));
                                     }}
-                                    className="group/word relative inline-flex items-center gap-1 rounded bg-[var(--accent-soft)] px-0.5 align-bottom text-[var(--accent)]"
+                                    className="group/word relative inline-flex items-center gap-1 rounded bg-white px-0.5 align-bottom text-black"
                                   >
                                     {quantity && (
-                                      <span className="whitespace-nowrap rounded bg-[var(--bg-muted)] px-1 py-0.5 text-[10px] font-semibold leading-none text-[var(--accent)]">
+                                      <span className="whitespace-nowrap rounded bg-black/10 px-1 py-0.5 text-[10px] font-semibold leading-none text-black">
                                         {quantity}
                                       </span>
                                     )}
