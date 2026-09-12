@@ -33,14 +33,39 @@ export default async function CookModePage({
   const ingredients = [...recipe.recipe_ingredients].sort((a, b) => a.position - b.position);
   const steps = [...recipe.recipe_steps].sort((a, b) => a.position - b.position);
 
-  // Every downvote this cook has ever left, across all their recipes — used
-  // to both hide the exact instance they flagged and, once the same word has
-  // been flagged on enough different recipes, auto-suppress it everywhere.
+  // Every vote this cook has ever left, across all their recipes — used to
+  // hide/correct exact instances they flagged, add brand-new connections
+  // they suggested, and (once the same word/fix shows up on enough
+  // different recipes) auto-apply it everywhere else too.
+  type FeedbackQueryRow = {
+    step_id: string;
+    ingredient_id: string;
+    word: string;
+    recipe_id: string;
+    vote: "up" | "down";
+    corrected_ingredient_id: string | null;
+    ingredient: { name: string } | null;
+    corrected: { name: string } | null;
+  };
   const { data: feedbackRows } = await supabase
     .from("ingredient_match_feedback")
-    .select("step_id, ingredient_id, word, recipe_id")
-    .eq("vote", "down");
-  const { suppressed, globalBlocklist } = buildFeedbackSets(feedbackRows ?? []);
+    .select(
+      `step_id, ingredient_id, word, recipe_id, vote, corrected_ingredient_id,
+       ingredient:recipe_ingredients!ingredient_match_feedback_ingredient_id_fkey(name),
+       corrected:recipe_ingredients!ingredient_match_feedback_corrected_ingredient_id_fkey(name)`
+    )
+    .returns<FeedbackQueryRow[]>();
+  const ingredientNameById = new Map<string, string>();
+  for (const r of feedbackRows ?? []) {
+    if (r.ingredient) ingredientNameById.set(r.ingredient_id, r.ingredient.name);
+    if (r.corrected_ingredient_id && r.corrected) {
+      ingredientNameById.set(r.corrected_ingredient_id, r.corrected.name);
+    }
+  }
+  const { suppressed, globalBlocklist, corrections, manualAdditions, preferredNameByWord } = buildFeedbackSets(
+    feedbackRows ?? [],
+    ingredientNameById
+  );
 
   return (
     <>
@@ -69,6 +94,9 @@ export default async function CookModePage({
         steps={steps}
         initialSuppressed={Array.from(suppressed)}
         initialGlobalBlocklist={Array.from(globalBlocklist)}
+        initialCorrections={Array.from(corrections.entries())}
+        initialManualAdditions={Array.from(manualAdditions.entries())}
+        initialPreferredNameByWord={Array.from(preferredNameByWord.entries())}
       />
     </>
   );

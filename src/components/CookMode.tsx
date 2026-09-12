@@ -24,7 +24,7 @@ import {
   splitByTerms,
 } from "@/lib/ingredientMatch";
 import { formatIngredientQuantity } from "@/lib/ingredients";
-import { matchFeedbackKey } from "@/lib/matchFeedback";
+import { manualAdditionKey, matchFeedbackKey } from "@/lib/matchFeedback";
 import { submitIngredientMatchFeedback } from "@/app/actions/matchFeedback";
 
 type SubTimer = { stepId: string; total: number; remaining: number; running: boolean };
@@ -41,6 +41,9 @@ export function CookMode({
   steps,
   initialSuppressed = [],
   initialGlobalBlocklist = [],
+  initialCorrections = [],
+  initialManualAdditions = [],
+  initialPreferredNameByWord = [],
 }: {
   recipeId: string;
   title: string;
@@ -58,6 +61,9 @@ export function CookMode({
   steps: Step[];
   initialSuppressed?: string[];
   initialGlobalBlocklist?: string[];
+  initialCorrections?: [string, string][];
+  initialManualAdditions?: [string, string][];
+  initialPreferredNameByWord?: [string, string][];
 }) {
   const splitStorageKey = `cookmode-split-${recipeId}`;
   const widthStorageKey = `cookmode-width-${recipeId}`;
@@ -74,8 +80,33 @@ export function CookMode({
   // different recipes to auto-blocklist everywhere. Both start from what's
   // already in the database and grow as votes come in this session.
   const [suppressed, setSuppressed] = useState(() => new Set(initialSuppressed));
-  const [globalBlocklist, setGlobalBlocklist] = useState(() => new Set(initialGlobalBlocklist));
+  const [globalBlocklist] = useState(() => new Set(initialGlobalBlocklist));
   const [voted, setVoted] = useState<Map<string, "up" | "down">>(new Map());
+  // Corrections a cook has suggested: exact (step, ingredient, word) ->
+  // ingredient id it should have matched instead. Plus, once enough recipes
+  // agree the same word should point at an ingredient with a given name,
+  // that preference applies automatically to any recipe with a
+  // similarly-named ingredient — no per-recipe correction needed.
+  const [corrections, setCorrections] = useState(() => new Map(initialCorrections));
+  // Brand-new connections a cook has drawn themselves, for words the
+  // algorithm never matched at all — keyed by step+word (no original
+  // ingredient to tie it to). Merged on top of the algorithmic matches.
+  const [manualAdditions, setManualAdditions] = useState(() => new Map(initialManualAdditions));
+  const [preferredNameByWord] = useState(() => new Map(initialPreferredNameByWord));
+  // Which word currently has its picker open (only one at a time). `mode`
+  // "correct" fixes an existing (already-downvoted) match; "new" suggests a
+  // connection for a word the algorithm never highlighted.
+  const [pendingCorrection, setPendingCorrection] = useState<{
+    mode: "correct" | "new";
+    stepId: string;
+    ingredientId: string | null;
+    word: string;
+  } | null>(null);
+  const [pickerValue, setPickerValue] = useState("");
+  const openPicker = useCallback((next: NonNullable<typeof pendingCorrection>) => {
+    setPendingCorrection(next);
+    setPickerValue("");
+  }, []);
   const dragging = useRef(false);
   const asideRef = useRef<HTMLElement>(null);
   const ingredientsContentRef = useRef<HTMLDivElement>(null);
@@ -300,21 +331,64 @@ export function CookMode({
     () => (currentStep ? mentionedWordMap(currentStep.body, ingredients) : new Map()),
     [currentStep, ingredients]
   );
-  // Drop anything a cook has thumbed down for this exact spot, or that's
-  // been thumbed down often enough elsewhere to be globally unreliable.
+  // Apply feedback on top of the raw match: an exact correction wins first,
+  // then a globally-learned preference (same word corrected/suggested to an
+  // ingredient with this name on enough other recipes), and only then does
+  // a plain thumbs-down/blocklisted word get dropped entirely. Finally,
+  // brand-new connections a cook has drawn themselves are merged in — these
+  // can add highlights for words the algorithm never matched at all.
   const highlightWordToIngredient = useMemo(() => {
     if (!currentStep) return rawWordToIngredient;
-    const filtered = new Map(rawWordToIngredient);
+    const resolved = new Map(rawWordToIngredient);
     for (const [word, ing] of rawWordToIngredient) {
-      if (
-        globalBlocklist.has(word) ||
-        suppressed.has(matchFeedbackKey(currentStep.id, ing.id, word))
-      ) {
-        filtered.delete(word);
+      const key = matchFeedbackKey(currentStep.id, ing.id, word);
+      const correctedId = corrections.get(key);
+      if (correctedId) {
+        const correctedIngredient = ingredients.find((i) => i.id === correctedId);
+        if (correctedIngredient) {
+          resolved.set(word, correctedIngredient);
+          continue;
+        }
+      }
+      if (suppressed.has(key) || globalBlocklist.has(word)) {
+        // Keep it visible (as the original, wrong pairing) while its "what
+        // should this be?" picker is still open — otherwise the mark it's
+        // anchored to would vanish the instant the downvote lands.
+        const isBeingCorrected =
+          pendingCorrection?.mode === "correct" &&
+          pendingCorrection.stepId === currentStep.id &&
+          pendingCorrection.word === word;
+        if (isBeingCorrected) continue;
+
+        const preferredName = preferredNameByWord.get(word);
+        const preferredIngredient = preferredName
+          ? ingredients.find((i) => i.name.trim().toLowerCase() === preferredName)
+          : undefined;
+        if (preferredIngredient) {
+          resolved.set(word, preferredIngredient);
+        } else {
+          resolved.delete(word);
+        }
       }
     }
-    return filtered;
-  }, [rawWordToIngredient, currentStep, suppressed, globalBlocklist]);
+    for (const [key, ingredientId] of manualAdditions) {
+      const [stepId, word] = key.split("::");
+      if (stepId !== currentStep.id) continue;
+      const ingredient = ingredients.find((i) => i.id === ingredientId);
+      if (ingredient) resolved.set(word, ingredient);
+    }
+    return resolved;
+  }, [
+    rawWordToIngredient,
+    currentStep,
+    suppressed,
+    globalBlocklist,
+    corrections,
+    manualAdditions,
+    preferredNameByWord,
+    ingredients,
+    pendingCorrection,
+  ]);
   const highlightTerms = useMemo(
     () => Array.from(highlightWordToIngredient.keys()),
     [highlightWordToIngredient]
@@ -326,6 +400,9 @@ export function CookMode({
       setVoted((v) => new Map(v).set(key, vote));
       if (vote === "down") {
         setSuppressed((s) => new Set(s).add(key));
+        openPicker({ mode: "correct", stepId, ingredientId, word });
+      } else {
+        setPendingCorrection(null);
       }
       submitIngredientMatchFeedback({
         recipeId,
@@ -336,6 +413,50 @@ export function CookMode({
       }).catch(() => {
         // Best-effort: the local suppression already took effect for this
         // session even if the write fails; it'll just re-appear next visit.
+      });
+    },
+    [recipeId, openPicker]
+  );
+
+  // A cook picked which ingredient a downvoted word should have matched
+  // instead (or said "not an ingredient", which just leaves it suppressed).
+  const handleCorrect = useCallback(
+    (stepId: string, ingredientId: string, word: string, correctedIngredientId: string | null) => {
+      const key = matchFeedbackKey(stepId, ingredientId, word);
+      setPendingCorrection(null);
+      if (correctedIngredientId) {
+        setCorrections((c) => new Map(c).set(key, correctedIngredientId));
+      }
+      submitIngredientMatchFeedback({
+        recipeId,
+        stepId,
+        ingredientId,
+        word,
+        vote: "down",
+        correctedIngredientId,
+      }).catch(() => {
+        // Best-effort — same as handleVote above.
+      });
+    },
+    [recipeId]
+  );
+
+  // A cook drew a brand-new connection for a word the algorithm never
+  // matched at all — stored as a plain thumbs-up on that (step, ingredient,
+  // word) triple, since as far as feedback is concerned it's just a match
+  // that's confirmed good from the moment it's created.
+  const handleSuggestNew = useCallback(
+    (stepId: string, word: string, ingredientId: string) => {
+      setPendingCorrection(null);
+      setManualAdditions((m) => new Map(m).set(manualAdditionKey(stepId, word), ingredientId));
+      submitIngredientMatchFeedback({
+        recipeId,
+        stepId,
+        ingredientId,
+        word,
+        vote: "up",
+      }).catch(() => {
+        // Best-effort — same as handleVote above.
       });
     },
     [recipeId]
@@ -582,8 +703,98 @@ export function CookMode({
                                 const key = seg.text.toLowerCase();
                                 termCounts.set(key, (termCounts.get(key) ?? 0) + 1);
                               }
+                              // A word repeated in the same step shares one correction
+                              // (the fix is per word, not per occurrence) — but only its
+                              // first occurrence should show the open picker, or every
+                              // repeat would pop one up at once.
+                              const seenForPicker = new Set<string>();
+                              const seenForNewPicker = new Set<string>();
                               return segments.map((seg, si) => {
-                                if (!seg.matched) return <span key={si}>{seg.text}</span>;
+                                if (!seg.matched) {
+                                  // Split out just the word-shaped runs (letters, plus
+                                  // internal apostrophes/hyphens) so each real word can offer
+                                  // its own "suggest a connection" affordance — surrounding
+                                  // punctuation and spacing pass through untouched.
+                                  const tokens = seg.text.split(/([A-Za-z][A-Za-z'-]*)/);
+                                  return (
+                                    <span key={si}>
+                                      {tokens.map((tok, ti) => {
+                                        if (!/^[A-Za-z][A-Za-z'-]{2,}$/.test(tok)) {
+                                          return <span key={ti}>{tok}</span>;
+                                        }
+                                        const lower = tok.toLowerCase();
+                                        const isFirstOccurrence = !seenForNewPicker.has(lower);
+                                        seenForNewPicker.add(lower);
+                                        const isPendingNew =
+                                          isFirstOccurrence &&
+                                          pendingCorrection?.mode === "new" &&
+                                          pendingCorrection.stepId === step.id &&
+                                          pendingCorrection.word === lower;
+                                        return (
+                                          <span key={ti} className="group/newword relative">
+                                            {tok}
+                                            {isPendingNew ? (
+                                              <span
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="absolute -top-9 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs shadow-[var(--shadow)]"
+                                              >
+                                                <select
+                                                  autoFocus
+                                                  value={pickerValue}
+                                                  onChange={(e) => setPickerValue(e.target.value)}
+                                                  className="rounded border border-[var(--border)] bg-[var(--bg-elevated)] px-1 py-0.5 text-xs"
+                                                >
+                                                  <option value="">Link to…</option>
+                                                  {ingredients.map((ing) => (
+                                                    <option key={ing.id} value={ing.id}>
+                                                      {ing.name}
+                                                    </option>
+                                                  ))}
+                                                </select>
+                                                <button
+                                                  type="button"
+                                                  disabled={!pickerValue}
+                                                  onClick={() =>
+                                                    pickerValue &&
+                                                    handleSuggestNew(step.id, lower, pickerValue)
+                                                  }
+                                                  className="rounded-full bg-[var(--accent)] px-2 py-0.5 leading-none text-white disabled:opacity-40"
+                                                >
+                                                  Save
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setPendingCorrection(null)}
+                                                  className="rounded-full px-1.5 py-0.5 leading-none hover:bg-[var(--bg-muted)]"
+                                                >
+                                                  ✕
+                                                </button>
+                                              </span>
+                                            ) : (
+                                              <button
+                                                type="button"
+                                                title="Suggest this should link to an ingredient"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  openPicker({
+                                                    mode: "new",
+                                                    stepId: step.id,
+                                                    ingredientId: null,
+                                                    word: lower,
+                                                  });
+                                                }}
+                                                className="absolute -top-4 left-1/2 hidden h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] text-[10px] leading-none text-[var(--text-muted)] shadow-[var(--shadow)] hover:text-[var(--accent)] group-hover/newword:flex"
+                                              >
+                                                +
+                                              </button>
+                                            )}
+                                          </span>
+                                        );
+                                      })}
+                                    </span>
+                                  );
+                                }
+
                                 const key = seg.text.toLowerCase();
                                 const matchedIngredient = highlightWordToIngredient.get(key);
                                 const quantity =
@@ -594,6 +805,14 @@ export function CookMode({
                                   ? matchFeedbackKey(step.id, matchedIngredient.id, key)
                                   : null;
                                 const vote = feedbackKey ? voted.get(feedbackKey) : undefined;
+                                const isFirstOccurrence = !seenForPicker.has(key);
+                                seenForPicker.add(key);
+                                const isBeingCorrected =
+                                  matchedIngredient &&
+                                  isFirstOccurrence &&
+                                  pendingCorrection?.mode === "correct" &&
+                                  pendingCorrection.stepId === step.id &&
+                                  pendingCorrection.word === key;
                                 return (
                                   <mark
                                     key={si}
@@ -605,35 +824,74 @@ export function CookMode({
                                       </span>
                                     )}
                                     <span>{seg.text}</span>
-                                    {matchedIngredient && (
-                                      <span className="pointer-events-none absolute -top-8 left-1/2 z-30 hidden -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs shadow-[var(--shadow)] group-hover/word:pointer-events-auto group-hover/word:flex">
+                                    {isBeingCorrected && matchedIngredient ? (
+                                      <span
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="absolute -top-9 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs normal-case text-[var(--text)] shadow-[var(--shadow)]"
+                                      >
+                                        <select
+                                          autoFocus
+                                          value={pickerValue}
+                                          onChange={(e) => setPickerValue(e.target.value)}
+                                          className="rounded border border-[var(--border)] bg-[var(--bg-elevated)] px-1 py-0.5 text-xs"
+                                        >
+                                          <option value="">Not an ingredient</option>
+                                          {ingredients
+                                            .filter((i) => i.id !== matchedIngredient.id)
+                                            .map((ing) => (
+                                              <option key={ing.id} value={ing.id}>
+                                                {ing.name}
+                                              </option>
+                                            ))}
+                                        </select>
                                         <button
                                           type="button"
-                                          title="This is matching correctly"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleVote(step.id, matchedIngredient.id, key, "up");
-                                          }}
-                                          className={`rounded-full px-1.5 py-0.5 leading-none hover:bg-[var(--bg-muted)] ${
-                                            vote === "up" ? "bg-[var(--accent-soft)]" : ""
-                                          }`}
+                                          onClick={() =>
+                                            handleCorrect(step.id, matchedIngredient.id, key, pickerValue || null)
+                                          }
+                                          className="rounded-full bg-[var(--accent)] px-2 py-0.5 leading-none text-white"
                                         >
-                                          👍
+                                          Save
                                         </button>
                                         <button
                                           type="button"
-                                          title="Stop matching this"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleVote(step.id, matchedIngredient.id, key, "down");
-                                          }}
-                                          className={`rounded-full px-1.5 py-0.5 leading-none hover:bg-[var(--bg-muted)] ${
-                                            vote === "down" ? "bg-[var(--accent-soft)]" : ""
-                                          }`}
+                                          onClick={() => setPendingCorrection(null)}
+                                          className="rounded-full px-1.5 py-0.5 leading-none hover:bg-[var(--bg-muted)]"
                                         >
-                                          👎
+                                          ✕
                                         </button>
                                       </span>
+                                    ) : (
+                                      matchedIngredient && (
+                                        <span className="pointer-events-none absolute -top-8 left-1/2 z-30 hidden -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs shadow-[var(--shadow)] group-hover/word:pointer-events-auto group-hover/word:flex">
+                                          <button
+                                            type="button"
+                                            title="This is matching correctly"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleVote(step.id, matchedIngredient.id, key, "up");
+                                            }}
+                                            className={`rounded-full px-1.5 py-0.5 leading-none hover:bg-[var(--bg-muted)] ${
+                                              vote === "up" ? "bg-[var(--accent-soft)]" : ""
+                                            }`}
+                                          >
+                                            👍
+                                          </button>
+                                          <button
+                                            type="button"
+                                            title="Stop matching this"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleVote(step.id, matchedIngredient.id, key, "down");
+                                            }}
+                                            className={`rounded-full px-1.5 py-0.5 leading-none hover:bg-[var(--bg-muted)] ${
+                                              vote === "down" ? "bg-[var(--accent-soft)]" : ""
+                                            }`}
+                                          >
+                                            👎
+                                          </button>
+                                        </span>
+                                      )
                                     )}
                                   </mark>
                                 );
