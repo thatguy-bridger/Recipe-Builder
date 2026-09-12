@@ -534,8 +534,10 @@ export function CookMode({
               onPointerMove={onDragHeight}
               onPointerUp={stopDragHeight}
               onPointerCancel={stopDragHeight}
-              className="h-2.5 shrink-0 touch-none cursor-row-resize border-t border-[var(--border)] bg-[var(--border)] hover:bg-[var(--accent)]"
-            />
+              className="group flex h-5 shrink-0 touch-none cursor-row-resize items-center border-t border-[var(--border)]"
+            >
+              <div className="h-1.5 w-full bg-[var(--border)] group-hover:bg-[var(--accent)]" />
+            </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
             <div ref={equipmentContentRef} className="flex min-h-0 flex-col">
             <h2 className="mb-3 shrink-0 font-serif text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
@@ -562,8 +564,10 @@ export function CookMode({
         onPointerMove={onDrag}
         onPointerUp={stopDrag}
         onPointerCancel={stopDrag}
-        className="sticky top-[57px] h-[calc(100vh-57px)] w-2.5 shrink-0 touch-none cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)]"
-      />
+        className="group sticky top-[57px] flex h-[calc(100vh-57px)] w-5 shrink-0 touch-none cursor-col-resize justify-center"
+      >
+        <div className="h-full w-1.5 bg-[var(--border)] group-hover:bg-[var(--accent)]" />
+      </div>
 
       <section className="flex h-[calc(100vh-57px)] flex-1 flex-col overflow-hidden p-8 pb-24">
         <div className="flex w-full flex-1 flex-col gap-8 overflow-hidden">
