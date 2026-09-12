@@ -11,3 +11,18 @@ export function titleCase(input: string): string {
     })
     .join("");
 }
+
+// Capitalizes the first letter of every sentence in free-form text (step
+// instructions, descriptions, notes) without touching the rest of the
+// casing — unlike titleCase, this leaves mid-sentence words alone (an
+// ingredient note like "room temperature, not cold" stays lowercase after
+// its first letter). Splits on ". ", "! ", "? " plus start-of-string/
+// start-of-line, and leaves everything else — including existing
+// capitalization elsewhere in the sentence — untouched.
+export function capitalizeSentences(input: string | null | undefined): string {
+  if (!input) return input ?? "";
+  return input.replace(
+    /(^|[.!?]\s+|\n)([a-z])/g,
+    (_match, boundary: string, letter: string) => boundary + letter.toUpperCase()
+  );
+}

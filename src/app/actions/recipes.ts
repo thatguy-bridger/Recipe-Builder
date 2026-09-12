@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { titleCase } from "@/lib/text";
+import { capitalizeSentences, titleCase } from "@/lib/text";
 import { parseFraction } from "@/lib/fractions";
 import { checkRateLimit, reserveRateLimitSlots } from "@/lib/rateLimit";
 
@@ -33,7 +33,7 @@ export async function createRecipe(formData: FormData) {
   if (!user) redirect("/login");
 
   const title = titleCase(String(formData.get("title")));
-  const description = String(formData.get("description") || "");
+  const description = capitalizeSentences(String(formData.get("description") || ""));
   const servings = Number(formData.get("servings")) || 4;
   const servingUnit = titleCase(String(formData.get("serving_unit") || "Serving").trim()) || "Serving";
   const prep = String(formData.get("prep_minutes") || "").trim() || null;
@@ -103,7 +103,7 @@ export async function updateRecipe(recipeId: string, formData: FormData) {
     .single();
 
   const title = titleCase(String(formData.get("title")));
-  const description = String(formData.get("description") || "");
+  const description = capitalizeSentences(String(formData.get("description") || ""));
   const servings = Number(formData.get("servings")) || 4;
   const servingUnit = titleCase(String(formData.get("serving_unit") || "Serving").trim()) || "Serving";
   const prep = String(formData.get("prep_minutes") || "").trim() || null;
@@ -202,7 +202,7 @@ async function writeChildren(
             unit: ing.unit || null,
             name: titleCase(ing.name),
             category: ing.category ? titleCase(ing.category) : null,
-            note: ing.note || null,
+            note: ing.note ? capitalizeSentences(ing.note) : null,
           }))
         )
       : Promise.resolve({ error: null }),
@@ -211,7 +211,7 @@ async function writeChildren(
           steps.map((step, i) => ({
             recipe_id: recipeId,
             position: i,
-            body: step.body,
+            body: capitalizeSentences(step.body),
             photo_urls: step.photo_urls,
             is_pinned: step.is_pinned,
             timer_minutes: step.timer_minutes || null,
@@ -586,7 +586,7 @@ async function importOneRecipe(
     .insert({
       owner_id: userId,
       title: titleCase(title),
-      description: parsed.description ?? null,
+      description: parsed.description ? capitalizeSentences(parsed.description) : null,
       servings: parsed.servings ?? 4,
       serving_unit: parsed.serving_unit ?? "Serving",
       prep_minutes: parsed.prep_minutes ?? null,
