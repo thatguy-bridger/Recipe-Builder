@@ -232,16 +232,27 @@ export function CookMode({
   // The overall cook-session timer lives in a global provider (so it can
   // show as a warning badge in the top bar even after leaving this page).
   // Entering Cook Mode claims/starts it for this recipe, counting down from
-  // the recipe's total time when one is set.
+  // the recipe's total time when one is set. When the recipe has no total
+  // time, don't start a stopwatch on its own — leave a blank field so the
+  // cook can type in a number of minutes to count down from instead.
   const { timer: mainTimer, startFor, pause: pauseMain, resume: resumeMain, reset: resetMain } = useCookTimer();
   const totalSeconds = totalMinutes ? (() => {
     const minutes = parseMinutesText(totalMinutes);
     return minutes != null ? Math.round(minutes * 60) : null;
   })() : null;
+  const [manualMinutes, setManualMinutes] = useState("");
   useEffect(() => {
+    if (totalSeconds == null) return;
     startFor(recipeId, title, totalSeconds);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipeId, totalSeconds]);
+  const timerActiveForThisRecipe = mainTimer.recipeId === recipeId;
+  const needsManualTimer = totalSeconds == null && !timerActiveForThisRecipe;
+  const startManualTimer = () => {
+    const minutes = Number(manualMinutes);
+    if (!Number.isFinite(minutes) || minutes <= 0) return;
+    startFor(recipeId, title, Math.round(minutes * 60));
+  };
   const mainRemaining = remainingSeconds(mainTimer);
   const mainDone = mainTimer.totalSeconds != null && mainRemaining === 0;
 
@@ -592,38 +603,65 @@ export function CookMode({
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <div
-                className={`flex items-center gap-3 rounded-[var(--radius)] border-2 px-4 py-2 shadow-[var(--shadow)] ${
-                  mainDone
-                    ? "border-[var(--danger)] bg-[var(--danger)]/10"
-                    : "border-[var(--accent)] bg-[var(--accent-soft)]"
-                }`}
-              >
-                <span
-                  className={`text-3xl font-bold leading-none tabular-nums ${
-                    mainDone ? "text-[var(--danger)]" : "text-[var(--accent)]"
-                  }`}
-                >
-                  {mainDone ? "Time's up!" : formatDuration(mainRemaining)}
-                </span>
-                <div className="flex flex-col gap-1">
+              {needsManualTimer ? (
+                <div className="flex items-center gap-2 rounded-[var(--radius)] border-2 border-[var(--border)] px-4 py-2 shadow-[var(--shadow)]">
+                  <label className="text-sm text-[var(--text-muted)]" htmlFor="manual-timer-minutes">
+                    Timer (min)
+                  </label>
+                  <input
+                    id="manual-timer-minutes"
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    placeholder="—"
+                    value={manualMinutes}
+                    onChange={(e) => setManualMinutes(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && startManualTimer()}
+                    className="w-16 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-sm tabular-nums"
+                  />
                   <button
                     type="button"
-                    onClick={mainTimer.running ? pauseMain : resumeMain}
-                    title="Space"
-                    className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
+                    onClick={startManualTimer}
+                    disabled={!manualMinutes}
+                    className="rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-medium text-white disabled:opacity-40"
                   >
-                    {mainTimer.running ? "Pause" : "Resume"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={resetMain}
-                    className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
-                  >
-                    Reset
+                    Start
                   </button>
                 </div>
-              </div>
+              ) : (
+                <div
+                  className={`flex items-center gap-3 rounded-[var(--radius)] border-2 px-4 py-2 shadow-[var(--shadow)] ${
+                    mainDone
+                      ? "border-[var(--danger)] bg-[var(--danger)]/10"
+                      : "border-[var(--accent)] bg-[var(--accent-soft)]"
+                  }`}
+                >
+                  <span
+                    className={`text-3xl font-bold leading-none tabular-nums ${
+                      mainDone ? "text-[var(--danger)]" : "text-[var(--accent)]"
+                    }`}
+                  >
+                    {mainDone ? "Time's up!" : formatDuration(mainRemaining)}
+                  </span>
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={mainTimer.running ? pauseMain : resumeMain}
+                      title="Space"
+                      className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
+                    >
+                      {mainTimer.running ? "Pause" : "Resume"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetMain}
+                      className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
                 Show

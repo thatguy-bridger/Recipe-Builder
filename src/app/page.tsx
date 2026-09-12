@@ -137,7 +137,7 @@ export default async function HomePage({
               <Link
                 key={t}
                 href={qs ? `/?${qs}` : "/"}
-                className={`rounded-full border px-3 py-1 font-serif text-xs ${
+                className={`rounded-full border px-3 py-1 font-serif text-xs uppercase ${
                   tag === t
                     ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
                     : "border-[var(--border)] text-[var(--text-muted)]"
