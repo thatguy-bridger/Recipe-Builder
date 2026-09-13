@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { importRecipeJson } from "@/app/actions/recipes";
-import { SubmitButton } from "@/components/SubmitButton";
 import { ImportPrefill } from "@/components/ImportPrefill";
+import { ImportJsonForm } from "@/components/ImportJsonForm";
 
 export default async function ImportRecipePage({
   searchParams,
@@ -67,21 +67,7 @@ export default async function ImportRecipePage({
 
       <ImportPrefill />
 
-      <form action={importRecipeJson} className="flex flex-col gap-4">
-        <textarea
-          name="json"
-          required
-          rows={16}
-          placeholder='{"title": "...", "ingredients": [...], "steps": [...]}  — or an array of these to import many at once'
-          className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 font-mono text-xs outline-none focus:border-[var(--accent)]"
-        />
-        <SubmitButton
-          pendingLabel="Importing…"
-          className="self-start rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--accent-hover)]"
-        >
-          Import
-        </SubmitButton>
-      </form>
+      <ImportJsonForm action={importRecipeJson} />
     </div>
   );
 }

@@ -20,7 +20,13 @@ export function ImportPrefill() {
       const json = decodeURIComponent(escape(atob(encoded)));
       // Validate + pretty-print rather than dumping the raw base64 payload.
       const parsed = JSON.parse(json);
-      if (textarea) textarea.value = JSON.stringify(parsed, null, 2);
+      if (textarea) {
+        textarea.value = JSON.stringify(parsed, null, 2);
+        // The textarea is a React-controlled input (for the live preview) —
+        // setting .value directly doesn't notify React, so fire the native
+        // event its onChange listens for.
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      }
       setPrefilled(true);
     } catch {
       // Malformed/tampered fragment — leave the textarea empty rather than
