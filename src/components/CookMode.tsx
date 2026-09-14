@@ -43,6 +43,34 @@ function keepPopoverInViewport(el: HTMLElement | null) {
   if (shift !== 0) el.style.transform = `translateX(calc(-50% + ${shift}px))`;
 }
 
+// Piecewise-linear multiplier off a step's word count: big for very short
+// steps, tapering down to 1x by the last stop. `stops` are [wordCount,
+// scale] pairs in ascending word-count order.
+function wordCountScale(body: string, stops: [number, number][]): number {
+  const wordCount = body.trim().split(/\s+/).filter(Boolean).length;
+  if (wordCount <= stops[0][0]) return stops[0][1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [w0, s0] = stops[i];
+    const [w1, s1] = stops[i + 1];
+    if (wordCount <= w1) return s0 - ((wordCount - w0) / (w1 - w0)) * (s0 - s1);
+  }
+  return stops[stops.length - 1][1];
+}
+
+const CURRENT_STEP_SCALE_STOPS: [number, number][] = [
+  [3, 5],
+  [20, 2],
+  [50, 1],
+];
+// Other visible steps are small orphan cards, not the focal point, so they
+// get a gentler range — noticeably bigger when short, but never so big it
+// breaks the card layout.
+const OTHER_STEP_SCALE_STOPS: [number, number][] = [
+  [3, 2.2],
+  [20, 1.5],
+  [50, 1],
+];
+
 export function CookMode({
   recipeId,
   title,
@@ -446,6 +474,15 @@ export function CookMode({
   // only when none of their own ingredients already matched — an individual
   // ingredient match is more specific/accurate and takes priority.
   const currentStep = steps[current];
+  // Short steps read better blown up big; long ones would overflow if scaled
+  // the same amount, so the multiplier shrinks smoothly as the word count
+  // grows, landing back at 1x (the base size) by ~50 words. Used for both
+  // the current step (off a text-lg base) and the other visible steps (off
+  // a text-sm base, with a gentler max so orphan cards don't blow out).
+  const currentStepTextScale = useMemo(
+    () => (currentStep ? wordCountScale(currentStep.body, CURRENT_STEP_SCALE_STOPS) : 1),
+    [currentStep]
+  );
   // Which ingredient each highlighted word came from, so its quantity can
   // be shown right above the word in the step text — no need to glance
   // back at the sidebar list mid-step.
@@ -964,7 +1001,14 @@ export function CookMode({
                       >
                         {idx + 1}
                       </span>
-                      <p className={isCurrent ? "text-lg leading-relaxed" : "text-sm leading-relaxed"}>
+                      <p
+                        className="leading-relaxed"
+                        style={
+                          isCurrent
+                            ? { fontSize: `${1.125 * currentStepTextScale}rem` }
+                            : { fontSize: `${0.875 * wordCountScale(step.body, OTHER_STEP_SCALE_STOPS)}rem` }
+                        }
+                      >
                         {isCurrent
                           ? (() => {
                               const segments = splitByTerms(step.body, highlightTerms);
