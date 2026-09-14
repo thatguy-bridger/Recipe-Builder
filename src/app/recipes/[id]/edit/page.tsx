@@ -67,6 +67,9 @@ export default async function EditRecipePage({
     .order("created_at", { ascending: false })
     .limit(10);
 
+  const { data: taggedRecipes } = await supabase.from("recipes").select("tags");
+  const existingTags = Array.from(new Set((taggedRecipes ?? []).flatMap((r) => r.tags))).sort();
+
   const boundUpdate = updateRecipe.bind(null, id);
   const boundInvite = inviteCollaborator.bind(null, id);
   const boundDelete = deleteRecipe.bind(null, id);
@@ -95,7 +98,7 @@ export default async function EditRecipePage({
         </div>
       </div>
 
-      <RecipeForm action={boundUpdate} initial={recipe} />
+      <RecipeForm action={boundUpdate} initial={recipe} existingTags={existingTags} />
 
       {isOwner && (
         <section className="mt-12 border-t border-[var(--border)] pt-8">

@@ -5,6 +5,7 @@ import type { RecipeWithDetails } from "@/types/recipe";
 import { EditableImage } from "./EditableImage";
 import { PhotoPicker } from "./PhotoPicker";
 import { SubmitButton } from "./SubmitButton";
+import { TagPicker } from "./TagPicker";
 
 type IngredientRow = { amount: string; unit: string; name: string; category: string; note: string };
 type StepRow = { body: string; photo_urls: string[]; is_pinned: boolean; timer_minutes: string };
@@ -47,9 +48,11 @@ function GripIcon() {
 export function RecipeForm({
   action,
   initial,
+  existingTags = [],
 }: {
   action: (formData: FormData) => void;
   initial?: RecipeWithDetails;
+  existingTags?: string[];
 }) {
   const [ingredients, setIngredients] = useState<IngredientRow[]>(
     initial?.recipe_ingredients
@@ -476,15 +479,7 @@ export function RecipeForm({
             </label>
           </div>
 
-          <label className="flex flex-col gap-1 text-sm">
-            Tags (comma separated)
-            <input
-              name="tags"
-              defaultValue={initial?.tags.join(", ")}
-              placeholder="Dessert, Italian, Quick"
-              className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 outline-none focus:border-[var(--accent)]"
-            />
-          </label>
+          <TagPicker name="tags" initialTags={initial?.tags ?? []} suggestions={existingTags} />
           <label className="flex flex-col gap-1 text-sm">
             Equipment (comma separated)
             <input

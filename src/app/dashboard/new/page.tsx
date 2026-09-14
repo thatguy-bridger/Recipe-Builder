@@ -1,5 +1,6 @@
 import { RecipeForm } from "@/components/RecipeForm";
 import { createRecipe } from "@/app/actions/recipes";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function NewRecipePage({
   searchParams,
@@ -7,6 +8,10 @@ export default async function NewRecipePage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
+
+  const supabase = await createClient();
+  const { data: taggedRecipes } = await supabase.from("recipes").select("tags");
+  const existingTags = Array.from(new Set((taggedRecipes ?? []).flatMap((r) => r.tags))).sort();
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
@@ -16,7 +21,7 @@ export default async function NewRecipePage({
           {error}
         </p>
       )}
-      <RecipeForm action={createRecipe} />
+      <RecipeForm action={createRecipe} existingTags={existingTags} />
     </div>
   );
 }
