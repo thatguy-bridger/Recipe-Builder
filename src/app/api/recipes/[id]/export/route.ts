@@ -5,6 +5,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const supabase = await createClient();
 
+  // This is only ever linked from the edit page, which is itself gated by
+  // can_edit_recipe — mirror that check here rather than relying solely on
+  // RLS, so this route can't become an open "fetch any recipe by id"
+  // endpoint if a select policy is ever loosened.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  const { data: canEdit } = await supabase.rpc("can_edit_recipe", { rid: id });
+  if (!canEdit) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   const { data: recipe } = await supabase
     .from("recipes")
     .select(

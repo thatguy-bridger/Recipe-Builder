@@ -6,9 +6,9 @@ import { updateDesignLanguage } from "@/app/actions/settings";
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
-  const { saved } = await searchParams;
+  const { saved, error } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -33,6 +33,11 @@ export default async function SettingsPage({
       {saved && (
         <p className="mb-6 rounded-lg bg-[var(--success)]/10 px-3 py-2 text-sm text-[var(--success)]">
           Saved.
+        </p>
+      )}
+      {error && (
+        <p className="mb-6 rounded-lg bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">
+          Couldn&apos;t save: {error}
         </p>
       )}
 

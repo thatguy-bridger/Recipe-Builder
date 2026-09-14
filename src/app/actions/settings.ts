@@ -26,7 +26,7 @@ export async function updateDesignLanguage(formData: FormData) {
 
   const themeApplyToApp = formData.get("theme_apply_to_app") === "on";
 
-  await supabase
+  const { error } = await supabase
     .from("profiles")
     .update({
       theme_accent: themeAccent,
@@ -36,6 +36,8 @@ export async function updateDesignLanguage(formData: FormData) {
       theme_apply_to_app: themeApplyToApp,
     })
     .eq("id", user.id);
+
+  if (error) redirect(`/settings?error=${encodeURIComponent(error.message)}`);
 
   revalidatePath("/settings");
   revalidatePath("/");

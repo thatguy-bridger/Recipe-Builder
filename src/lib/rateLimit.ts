@@ -11,6 +11,13 @@ import type { createClient } from "@/lib/supabase/server";
 // import zero forever because the one request was "too big".
 // Backed by recipe_app.rate_limit_events, which RLS restricts to each
 // user's own rows, so this only ever counts the current user's own events.
+//
+// The count-then-insert is done atomically in the reserve_rate_limit_slots
+// Postgres function (advisory-locked per user+key) rather than here in JS —
+// two concurrent requests each reading a stale count in separate round
+// trips could otherwise both be granted slots that together exceed `max`.
+// The function also opportunistically deletes this user's own expired
+// events for the key, so the table doesn't grow unbounded.
 export async function reserveRateLimitSlots(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
@@ -21,21 +28,15 @@ export async function reserveRateLimitSlots(
 ): Promise<number> {
   if (requested <= 0) return 0;
 
-  const since = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
-  const { count } = await supabase
-    .from("rate_limit_events")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("key", key)
-    .gte("created_at", since);
-
-  const allowed = Math.min(requested, Math.max(0, max - (count ?? 0)));
-  if (allowed > 0) {
-    await supabase
-      .from("rate_limit_events")
-      .insert(Array.from({ length: allowed }, () => ({ user_id: userId, key })));
-  }
-  return allowed;
+  const { data, error } = await supabase.rpc("reserve_rate_limit_slots", {
+    p_user_id: userId,
+    p_key: key,
+    p_max: max,
+    p_window_minutes: windowMinutes,
+    p_requested: requested,
+  });
+  if (error) throw error;
+  return data ?? 0;
 }
 
 // Simple boolean form for single-item actions (e.g. one invite).

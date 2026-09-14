@@ -118,6 +118,26 @@ export function ImageCropEditor({
     dragState.current = null;
   }
 
+  // Keyboard equivalent of the pointer-drag reposition above, for anyone
+  // who can't drag with a mouse/touch — arrow keys nudge the crop by 20px.
+  function onPanKeyDown(e: React.KeyboardEvent) {
+    const step = 20;
+    const delta: Offset =
+      e.key === "ArrowLeft"
+        ? { x: step, y: 0 }
+        : e.key === "ArrowRight"
+          ? { x: -step, y: 0 }
+          : e.key === "ArrowUp"
+            ? { x: 0, y: step }
+            : e.key === "ArrowDown"
+              ? { x: 0, y: -step }
+              : { x: 0, y: 0 };
+    if (delta.x === 0 && delta.y === 0) return;
+    e.preventDefault();
+    const scale = baseScale() * zoom;
+    setOffset((o) => clampOffset({ x: o.x + delta.x, y: o.y + delta.y }, scale));
+  }
+
   function handleZoomChange(next: number) {
     setZoom(next);
     setOffset((o) => clampOffset(o, baseScale() * next));
@@ -184,11 +204,15 @@ export function ImageCropEditor({
         </div>
         <div
           style={{ width: frameSize.w, height: frameSize.h }}
-          className="relative touch-none select-none overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-muted)]"
+          className="relative touch-none select-none overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerLeave={onPointerUp}
+          role="group"
+          aria-label="Reposition the crop — drag, or use the arrow keys"
+          tabIndex={0}
+          onKeyDown={onPanKeyDown}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { capitalizeSentences, titleCase } from "@/lib/text";
 import { parseFraction } from "@/lib/fractions";
 import { checkRateLimit, reserveRateLimitSlots } from "@/lib/rateLimit";
+import { extractRecipePhotoStoragePath } from "@/lib/storagePaths";
 
 type IngredientInput = { amount: string; unit: string; name: string; category: string; note: string };
 type StepInput = { body: string; photo_urls: string[]; is_pinned: boolean; timer_minutes: string };
@@ -251,7 +252,34 @@ export async function deleteRecipe(recipeId: string) {
     redirect(`/recipes/${recipeId}?error=${encodeURIComponent("Only the recipe owner can delete it")}`);
   }
 
-  await supabase.from("recipes").delete().eq("id", recipeId);
+  // Gather storage paths before deleting rows — recipe_photos and recipe
+  // step photos are the recipe's own files, not shared with anything else,
+  // so once the recipe is gone these would otherwise leak in the bucket
+  // forever with nothing left pointing at them to clean up later.
+  const [{ data: photos }, { data: steps }] = await Promise.all([
+    supabase.from("recipe_photos").select("url").eq("recipe_id", recipeId),
+    supabase.from("recipe_steps").select("photo_urls").eq("recipe_id", recipeId),
+  ]);
+  const urls = [
+    ...(photos ?? []).map((p) => p.url),
+    ...(steps ?? []).flatMap((s) => s.photo_urls ?? []),
+  ];
+  const storagePaths = urls
+    .map((url) => extractRecipePhotoStoragePath(url))
+    .filter((path): path is string => path != null);
+
+  const { error } = await supabase.from("recipes").delete().eq("id", recipeId);
+  if (error) {
+    redirect(`/recipes/${recipeId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  if (storagePaths.length > 0) {
+    // Best-effort: the recipe is already gone either way, and a failed
+    // cleanup here just leaves an orphaned file rather than breaking
+    // anything the cook can see.
+    await supabase.storage.from("recipe-photos").remove(storagePaths);
+  }
+
   revalidatePath("/dashboard");
   redirect("/dashboard");
 }
@@ -499,12 +527,14 @@ export async function inviteCollaborator(recipeId: string, formData: FormData) {
   const match = matches?.[0];
 
   if (match) {
-    await supabase
+    const { error } = await supabase
       .from("recipe_collaborators")
       .upsert(
         { recipe_id: recipeId, user_id: match.id, invited_by: user.id, permission },
         { onConflict: "recipe_id,user_id" }
       );
+    if (error) redirect(`/recipes/${recipeId}/edit?error=${encodeURIComponent(error.message)}`);
+
     revalidatePath(`/recipes/${recipeId}/edit`);
     redirect(`/recipes/${recipeId}/edit?invited=1`);
   }
@@ -519,11 +549,12 @@ export async function removeCollaborator(recipeId: string, userId: string) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  await supabase
+  const { error } = await supabase
     .from("recipe_collaborators")
     .delete()
     .eq("recipe_id", recipeId)
     .eq("user_id", userId);
+  if (error) redirect(`/recipes/${recipeId}/edit?error=${encodeURIComponent(error.message)}`);
 
   revalidatePath(`/recipes/${recipeId}/edit`);
   redirect(`/recipes/${recipeId}/edit`);
@@ -536,12 +567,13 @@ export async function createShareLink(recipeId: string) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("recipes")
     .update({ share_token: crypto.randomUUID() })
     .eq("id", recipeId)
     .select("share_token")
     .single();
+  if (error) throw error;
 
   revalidatePath(`/recipes/${recipeId}/edit`);
   return data?.share_token as string | undefined;
@@ -688,11 +720,11 @@ export async function toggleFavorite(recipeId: string, isFavorite: boolean) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  if (isFavorite) {
-    await supabase.from("recipe_favorites").delete().eq("recipe_id", recipeId).eq("user_id", user.id);
-  } else {
-    await supabase.from("recipe_favorites").upsert({ recipe_id: recipeId, user_id: user.id });
-  }
+  const { error } = isFavorite
+    ? await supabase.from("recipe_favorites").delete().eq("recipe_id", recipeId).eq("user_id", user.id)
+    : await supabase.from("recipe_favorites").upsert({ recipe_id: recipeId, user_id: user.id });
+  if (error) throw error;
+
   revalidatePath("/");
   revalidatePath("/dashboard");
 }
@@ -704,6 +736,8 @@ export async function revokeShareLink(recipeId: string) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  await supabase.from("recipes").update({ share_token: null }).eq("id", recipeId);
+  const { error } = await supabase.from("recipes").update({ share_token: null }).eq("id", recipeId);
+  if (error) throw error;
+
   revalidatePath(`/recipes/${recipeId}/edit`);
 }

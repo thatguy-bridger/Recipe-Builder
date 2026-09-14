@@ -23,13 +23,33 @@ export async function submitIngredientMatchFeedback(input: {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
 
+  if (input.vote !== "up" && input.vote !== "down") return { error: "Invalid vote" };
+  const word = input.word.trim().toLowerCase();
+  if (!word || word.length > 100) return { error: "Invalid word" };
+
+  // Confirm the step and both ingredients actually belong to the claimed
+  // recipe — without this, a caller could tie feedback to any (step,
+  // ingredient) pair regardless of which recipe they're really in,
+  // poisoning the global word-preference learning for unrelated recipes.
+  const ingredientIds = Array.from(
+    new Set([input.ingredientId, ...(input.correctedIngredientId ? [input.correctedIngredientId] : [])])
+  );
+  const [{ data: step }, { data: ingredients }] = await Promise.all([
+    supabase.from("recipe_steps").select("id").eq("id", input.stepId).eq("recipe_id", input.recipeId).maybeSingle(),
+    supabase.from("recipe_ingredients").select("id").eq("recipe_id", input.recipeId).in("id", ingredientIds),
+  ]);
+  if (!step) return { error: "Step does not belong to that recipe" };
+  if ((ingredients?.length ?? 0) !== ingredientIds.length) {
+    return { error: "Ingredient does not belong to that recipe" };
+  }
+
   const { error } = await supabase.from("ingredient_match_feedback").upsert(
     {
       user_id: user.id,
       recipe_id: input.recipeId,
       step_id: input.stepId,
       ingredient_id: input.ingredientId,
-      word: input.word.toLowerCase(),
+      word,
       vote: input.vote,
       corrected_ingredient_id: input.correctedIngredientId ?? null,
       updated_at: new Date().toISOString(),

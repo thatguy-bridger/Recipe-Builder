@@ -28,6 +28,21 @@ import { submitIngredientMatchFeedback } from "@/app/actions/matchFeedback";
 
 type SubTimer = { stepId: string; total: number; remaining: number; running: boolean };
 
+// A callback ref (not a hook — these popovers render inside a .map() over
+// step-text segments, where hooks can't be called) that nudges a
+// center-anchored popover back on-screen the moment it mounts, so it
+// doesn't clip off the edge of a narrow/phone-width viewport when the
+// word it's anchored to is near the left or right edge.
+function keepPopoverInViewport(el: HTMLElement | null) {
+  if (!el) return;
+  const margin = 8;
+  const rect = el.getBoundingClientRect();
+  let shift = 0;
+  if (rect.left < margin) shift = margin - rect.left;
+  else if (rect.right > window.innerWidth - margin) shift = window.innerWidth - margin - rect.right;
+  if (shift !== 0) el.style.transform = `translateX(calc(-50% + ${shift}px))`;
+}
+
 export function CookMode({
   recipeId,
   title,
@@ -118,6 +133,19 @@ export function CookMode({
   // hover, which doesn't exist on a touchscreen — so a tap on the word
   // itself toggles the same visibility a mouse hover would give it.
   const [activeControl, setActiveControl] = useState<string | null>(null);
+  // The sidebar's max width is capped against the viewport too, not just a
+  // fixed 640px — on a phone-width screen a fixed cap would still overflow
+  // the page since 640px alone can exceed the whole viewport.
+  const maxSidebarWidth = useCallback(() => {
+    if (typeof window === "undefined") return 640;
+    return Math.max(240, Math.min(640, window.innerWidth - 160));
+  }, []);
+  // Mirrors maxSidebarWidth() into state for use in JSX (e.g. aria-valuemax)
+  // — calling the window-dependent function directly during render would
+  // return a different value on the client's first render than what the
+  // server rendered, causing a hydration mismatch. Handlers (drag, keyboard)
+  // can call maxSidebarWidth() directly since those never run during SSR.
+  const [maxWidthForAria, setMaxWidthForAria] = useState(640);
   const dragging = useRef(false);
   const asideRef = useRef<HTMLElement>(null);
   const ingredientsScrollRef = useRef<HTMLDivElement>(null);
@@ -145,6 +173,12 @@ export function CookMode({
     } catch {
       // localStorage unavailable — fall back to auto-sizing below.
     }
+    // Clamp against the actual viewport too — a saved width from a wider
+    // screen, or just the fixed 400px default, can otherwise overflow a
+    // phone-width viewport outright.
+    const max = maxSidebarWidth();
+    setMaxWidthForAria(max);
+    setSidebarWidth((w) => Math.min(w, max));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipeId]);
 
@@ -180,10 +214,13 @@ export function CookMode({
     setIngredientsHeight(Math.min(total - 120, Math.max(120, proportional)));
   }, [ingredients, equipment, showServings]);
 
-  const onDrag = useCallback((e: ReactPointerEvent) => {
-    if (!dragging.current) return;
-    setSidebarWidth(Math.min(640, Math.max(300, e.clientX)));
-  }, []);
+  const onDrag = useCallback(
+    (e: ReactPointerEvent) => {
+      if (!dragging.current) return;
+      setSidebarWidth(Math.min(maxSidebarWidth(), Math.max(240, e.clientX)));
+    },
+    [maxSidebarWidth]
+  );
 
   const startDrag = (e: ReactPointerEvent) => {
     dragging.current = true;
@@ -227,6 +264,44 @@ export function CookMode({
         // ignore
       }
       return h;
+    });
+  };
+
+  // Keyboard equivalents of the two pointer-drag handles above, for cooks
+  // who can't use a mouse/touch drag — Left/Right (or Up/Down) nudge by
+  // 20px, Home/End jump to the min/max.
+  const handleWidthKeyDown = (e: React.KeyboardEvent) => {
+    const max = maxSidebarWidth();
+    const step = e.key === "Home" ? -Infinity : e.key === "End" ? Infinity : e.key === "ArrowLeft" ? -20 : e.key === "ArrowRight" ? 20 : null;
+    if (step == null) return;
+    e.preventDefault();
+    widthManual.current = true;
+    setSidebarWidth((w) => {
+      const next = Math.min(max, Math.max(240, w + step));
+      try {
+        localStorage.setItem(widthStorageKey, String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const handleHeightKeyDown = (e: React.KeyboardEvent) => {
+    const total = asideRef.current?.getBoundingClientRect().height ?? Infinity;
+    const max = total - 120;
+    const step = e.key === "Home" ? -Infinity : e.key === "End" ? Infinity : e.key === "ArrowUp" ? -20 : e.key === "ArrowDown" ? 20 : null;
+    if (step == null) return;
+    e.preventDefault();
+    heightManual.current = true;
+    setIngredientsHeight((h) => {
+      const next = Math.min(max, Math.max(120, h + step));
+      try {
+        localStorage.setItem(splitStorageKey, String(next));
+      } catch {
+        // ignore
+      }
+      return next;
     });
   };
 
@@ -667,7 +742,14 @@ export function CookMode({
               onPointerMove={onDragHeight}
               onPointerUp={stopDragHeight}
               onPointerCancel={stopDragHeight}
-              className="group flex h-5 shrink-0 touch-none cursor-row-resize items-center border-t border-[var(--border)]"
+              role="slider"
+              aria-label="Resize ingredients/equipment split"
+              aria-orientation="horizontal"
+              aria-valuenow={Math.round(ingredientsHeight)}
+              aria-valuemin={120}
+              tabIndex={0}
+              onKeyDown={handleHeightKeyDown}
+              className="group flex h-5 shrink-0 touch-none cursor-row-resize items-center border-t border-[var(--border)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
             >
               <div className="h-1.5 w-full bg-[var(--border)] group-hover:bg-[var(--accent)]" />
             </div>
@@ -697,7 +779,15 @@ export function CookMode({
         onPointerMove={onDrag}
         onPointerUp={stopDrag}
         onPointerCancel={stopDrag}
-        className="group sticky top-[57px] flex h-[calc(100vh-57px)] w-5 shrink-0 touch-none cursor-col-resize justify-center"
+        role="slider"
+        aria-label="Resize ingredients panel width"
+        aria-orientation="vertical"
+        aria-valuenow={Math.round(sidebarWidth)}
+        aria-valuemin={240}
+        aria-valuemax={maxWidthForAria}
+        tabIndex={0}
+        onKeyDown={handleWidthKeyDown}
+        className="group sticky top-[57px] flex h-[calc(100vh-57px)] w-5 shrink-0 touch-none cursor-col-resize justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
       >
         <div className="h-full w-1.5 bg-[var(--border)] group-hover:bg-[var(--accent)]" />
       </div>
@@ -930,6 +1020,7 @@ export function CookMode({
                                             {tok}
                                             {isPendingNew ? (
                                               <span
+                                                ref={keepPopoverInViewport}
                                                 onClick={(e) => e.stopPropagation()}
                                                 className="absolute -top-9 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs shadow-[var(--shadow)]"
                                               >
@@ -1036,6 +1127,7 @@ export function CookMode({
                                     <span>{seg.text}</span>
                                     {isBeingCorrected && matchedIngredient ? (
                                       <span
+                                        ref={keepPopoverInViewport}
                                         onClick={(e) => e.stopPropagation()}
                                         className="absolute -top-9 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs normal-case text-[var(--text)] shadow-[var(--shadow)]"
                                       >
