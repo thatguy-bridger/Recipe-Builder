@@ -1210,10 +1210,11 @@ export function CookMode({
                                     ) : (
                                       matchedIngredient && (
                                         <span
-                                          className={`absolute -top-8 left-1/2 z-30 -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs shadow-[var(--shadow)] group-hover/word:pointer-events-auto group-hover/word:flex ${
+                                          className={`absolute -top-8 left-1/2 z-30 -translate-x-1/2 items-end gap-1 whitespace-nowrap pb-3 group-hover/word:pointer-events-auto group-hover/word:flex ${
                                             isMarkTapActive ? "flex" : "pointer-events-none hidden"
                                           }`}
                                         >
+                                          <span className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs shadow-[var(--shadow)]">
                                           <button
                                             type="button"
                                             title="This is matching correctly"
@@ -1242,6 +1243,7 @@ export function CookMode({
                                           >
                                             👎
                                           </button>
+                                          </span>
                                         </span>
                                       )
                                     )}
