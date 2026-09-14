@@ -25,6 +25,8 @@ import {
 import { formatIngredientQuantity } from "@/lib/ingredients";
 import { manualAdditionKey, matchFeedbackKey } from "@/lib/matchFeedback";
 import { submitIngredientMatchFeedback } from "@/app/actions/matchFeedback";
+import { TranslateControl } from "./TranslateControl";
+import type { RecipeTranslation } from "@/app/actions/translate";
 
 type SubTimer = { stepId: string; total: number; remaining: number; running: boolean };
 
@@ -121,6 +123,24 @@ export function CookMode({
   const [showServings, setShowServings] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showInlineAmounts, setShowInlineAmounts] = useState(true);
+  // A translation, when active, is shown as a gloss alongside the original
+  // English rather than replacing it — the ingredient-mention matching and
+  // highlighting below is computed against the original English text, and
+  // there's no reliable way to remap that onto a different language's word
+  // order, so the interactive experience stays English-driven either way.
+  const [translation, setTranslation] = useState<RecipeTranslation | null>(null);
+  const translatedIngredientById = useMemo(
+    () => new Map(translation?.ingredients.map((t) => [t.id, t]) ?? []),
+    [translation]
+  );
+  const translatedStepById = useMemo(
+    () => new Map(translation?.steps.map((t) => [t.id, t]) ?? []),
+    [translation]
+  );
+  const translatedNameById = useMemo(
+    () => new Map(translation?.ingredients.map((t) => [t.id, t.name]) ?? []),
+    [translation]
+  );
   // Feedback-driven suppression: exact (step, ingredient, word) instances a
   // cook has thumbed down, plus words thumbed down often enough across
   // different recipes to auto-blocklist everywhere. Both start from what's
@@ -768,6 +788,7 @@ export function CookMode({
             highlightedIds={highlightedIds}
             highlightedCategories={highlightedCategories}
             onScaledIngredientsChange={setScaledIngredients}
+            translatedNameById={translatedNameById}
           />
           </div>
         </div>
@@ -796,12 +817,17 @@ export function CookMode({
               Equipment
             </h2>
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] items-start gap-x-4 gap-y-1.5 text-base">
-              {equipment.map((eq) => (
+              {equipment.map((eq, i) => (
                 <li
                   key={eq}
                   className="min-w-0 break-words before:mr-1 before:text-[var(--text-muted)] before:content-['·']"
                 >
                   {eq}
+                  {translation?.equipment[i] && (
+                    <span className="block break-words text-xs font-normal italic text-[var(--accent)]">
+                      {translation.equipment[i]}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -927,6 +953,8 @@ export function CookMode({
                 </div>
               )}
 
+              <TranslateControl recipeId={recipeId} onChange={setTranslation} />
+
               <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
                 Show
                 <select
@@ -959,7 +987,14 @@ export function CookMode({
                         <span className="mt-0.5 shrink-0 text-sm" aria-label="Always shown">
                           📌
                         </span>
-                        <p className="text-sm leading-relaxed">{step.body}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm leading-relaxed">{step.body}</p>
+                          {translatedStepById.get(step.id) && (
+                            <p className="mt-1 text-sm italic leading-relaxed text-[var(--accent)]">
+                              {translatedStepById.get(step.id)?.body}
+                            </p>
+                          )}
+                        </div>
                       </div>
                       <StepPhotos
                         urls={step.photo_urls}
@@ -1001,6 +1036,7 @@ export function CookMode({
                       >
                         {idx + 1}
                       </span>
+                      <div className="min-w-0 flex-1">
                       <p
                         className="leading-relaxed"
                         style={
@@ -1253,6 +1289,14 @@ export function CookMode({
                             })()
                           : step.body}
                       </p>
+                      {translatedStepById.get(step.id) && (
+                        <p
+                          className={`italic leading-relaxed text-[var(--accent)] ${isCurrent ? "mt-2 text-base" : "mt-1 text-sm"}`}
+                        >
+                          {translatedStepById.get(step.id)?.body}
+                        </p>
+                      )}
+                      </div>
                     </div>
                     <StepPhotos
                       urls={step.photo_urls}

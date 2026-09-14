@@ -19,6 +19,7 @@ export function ServingScaler({
   highlightedIds,
   highlightedCategories,
   onScaledIngredientsChange,
+  translatedNameById,
 }: {
   baseServings: number;
   servingUnit?: string;
@@ -35,6 +36,10 @@ export function ServingScaler({
   // caller (Cook Mode) can show the same live amounts inline in step text,
   // not just in this sidebar list.
   onScaledIngredientsChange?: (ingredients: Ingredient[]) => void;
+  // Optional translated name shown as a gloss under the (still-English)
+  // name, keyed by ingredient id — used by Cook Mode, which keeps the
+  // original name as the source of truth for ingredient-mention matching.
+  translatedNameById?: Map<string, string>;
 }) {
   const [servings, setServings] = useState(baseServings || 1);
   const factor = servings / (baseServings || 1);
@@ -152,6 +157,11 @@ export function ServingScaler({
                       <span className="font-medium text-[var(--accent)]">{quantity} </span>
                     )}
                     {ing.name}
+                    {translatedNameById?.has(ing.id) && (
+                      <span className="block break-words text-xs font-normal italic text-[var(--accent)]">
+                        {translatedNameById.get(ing.id)}
+                      </span>
+                    )}
                     {ing.note && (
                       <span className="block break-words text-xs font-normal text-[var(--text-muted)]">
                         {ing.note}

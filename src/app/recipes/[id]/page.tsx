@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { ServingScaler } from "@/components/ServingScaler";
-import { StepPhotos } from "@/components/StepPhotos";
+import { TranslatableRecipeView } from "@/components/TranslatableRecipeView";
 import { RecipeThemeScope } from "@/components/RecipeThemeScope";
 import { RecipeViewShortcuts } from "@/components/RecipeViewShortcuts";
 import { toEmbedUrl } from "@/lib/video";
@@ -80,11 +79,6 @@ export default async function RecipeDetailPage({
         </div>
       </div>
 
-      <h1 className="mt-4 font-serif text-3xl font-semibold sm:text-4xl">{recipe.title}</h1>
-      {recipe.description && (
-        <p className="mt-2 text-[var(--text-muted)]">{recipe.description}</p>
-      )}
-
       <div className="mt-4 flex flex-wrap gap-4 text-sm text-[var(--text-muted)]">
         {recipe.prep_minutes != null && <span>Prep: {recipe.prep_minutes} min</span>}
         {recipe.cook_minutes != null && <span>Cook: {recipe.cook_minutes} min</span>}
@@ -134,47 +128,16 @@ export default async function RecipeDetailPage({
         </div>
       )}
 
-      <section className="mt-10">
-        <h2 className="font-serif text-xl font-semibold">Ingredients</h2>
-        <div className="mt-3">
-          <ServingScaler
-            baseServings={recipe.servings ?? 1}
-            servingUnit={recipe.serving_unit}
-            ingredients={ingredients}
-          />
-        </div>
-
-        {recipe.equipment.length > 0 && (
-          <div className="mt-6">
-            <h2 className="font-serif text-xl font-semibold">Equipment</h2>
-            <ul className="mt-3 flex flex-col gap-1 text-sm">
-              {recipe.equipment.map((eq) => (
-                <li key={eq}>{eq}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
-
-      <section className="mt-10">
-        <h2 className="font-serif text-xl font-semibold">Steps</h2>
-        <ol className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {steps.map((step, i) => (
-            <li
-              key={step.id}
-              className="flex gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-4"
-            >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent)]">
-                {i + 1}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="leading-relaxed">{step.body}</p>
-                <StepPhotos urls={step.photo_urls} />
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <TranslatableRecipeView
+        recipeId={id}
+        title={recipe.title}
+        description={recipe.description}
+        baseServings={recipe.servings ?? 1}
+        servingUnit={recipe.serving_unit}
+        ingredients={ingredients}
+        equipment={recipe.equipment}
+        steps={steps}
+      />
     </RecipeThemeScope>
   );
 }
