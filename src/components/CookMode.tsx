@@ -1197,10 +1197,18 @@ export function CookMode({
                                       e.stopPropagation();
                                       setActiveControl((c) => (c === markControlKey ? null : markControlKey));
                                     }}
-                                    className="group/word relative inline-flex items-center gap-1 rounded border border-white/80 bg-white/40 px-0.5 align-bottom text-[var(--accent)]"
+                                    className="group/word relative inline-flex items-center gap-1 bg-transparent align-bottom text-[var(--accent)]"
+                                    style={{ WebkitTextStroke: "0.6px var(--text)" }}
                                   >
                                     {quantity && (
-                                      <span className="whitespace-nowrap rounded bg-[var(--bg-muted)] px-1 py-0.5 text-[10px] font-semibold leading-none text-[var(--accent)]">
+                                      <span
+                                        className="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-semibold leading-none"
+                                        style={{
+                                          WebkitTextStroke: "0",
+                                          background: "var(--text)",
+                                          color: "var(--bg)",
+                                        }}
+                                      >
                                         {quantity}
                                       </span>
                                     )}
