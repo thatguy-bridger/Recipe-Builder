@@ -72,6 +72,19 @@ const OTHER_STEP_SCALE_STOPS: [number, number][] = [
   [20, 1.5],
   [50, 1],
 ];
+// The All-steps overview grid scales each card's text off its OWN word
+// count (a short step fills its card; a long one shrinks enough not to
+// overflow it), then that result is further multiplied by how much room
+// the current column/row count actually gives each card — more steps
+// means smaller cards, which pulls the whole curve down with it.
+const OVERVIEW_SCALE_STOPS: [number, number][] = [
+  [8, 1.5],
+  [30, 0.95],
+  [70, 0.6],
+];
+// Below this, text stops being comfortably readable — a card that would
+// otherwise dip under it grows its row taller instead (see overviewRows).
+const OVERVIEW_SCALE_FLOOR = 0.8;
 
 export function CookMode({
   recipeId,
@@ -116,6 +129,11 @@ export function CookMode({
   const showServingsStorageKey = "cookmode-show-servings";
   const showInlineAmountsStorageKey = "cookmode-show-inline-amounts";
   const viewModeStorageKey = "cookmode-view-mode";
+  const textScaleStorageKey = "cookmode-text-scale";
+  const handlesAutoHideStorageKey = "cookmode-handles-autohide";
+  const TEXT_SCALE_MIN = 0.7;
+  const TEXT_SCALE_MAX = 1.8;
+  const TEXT_SCALE_STEP = 0.1;
 
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [ingredientsHeight, setIngredientsHeight] = useState(360);
@@ -126,6 +144,24 @@ export function CookMode({
   // "overview" lays out every step at once in a dense grid, for a cook who
   // wants to see the whole recipe rather than be walked through it.
   const [viewMode, setViewMode] = useState<"guided" | "overview">("guided");
+  // A global multiplier on top of every other text-scaling calculation in
+  // Cook Mode (guided step text, overview card text, and the overview
+  // grid's own column count) — bumping it up makes cards in the overview
+  // grid grow to fit the bigger text (fewer, larger cards), not just the
+  // text itself.
+  const [textScale, setTextScale] = useState(1);
+  // Double-clicking either resize bar toggles this: when on, both bars are
+  // invisible until hovered (or actively being dragged), instead of always
+  // showing a visible strip — a quieter layout for a cook who's already
+  // found their preferred sizes and doesn't need the handles on display.
+  const [handlesAutoHide, setHandlesAutoHide] = useState(false);
+  const [activeHandle, setActiveHandle] = useState<"width" | "height" | null>(null);
+  // While handlesAutoHide is on, the sidebar itself collapses away (not
+  // just the resize bar) whenever the mouse isn't over it or its handle —
+  // tracked on the wrapper around both, so moving from the handle into the
+  // sidebar (or back) doesn't flicker it closed in between.
+  const [sidebarHovered, setSidebarHovered] = useState(false);
+  const sidebarCollapsed = handlesAutoHide && !sidebarHovered && activeHandle !== "width";
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showInlineAmounts, setShowInlineAmounts] = useState(true);
   // A translation, when active, is shown as a gloss alongside the original
@@ -250,6 +286,10 @@ export function CookMode({
       if (storedShowInlineAmounts != null) setShowInlineAmounts(storedShowInlineAmounts === "true");
       const storedViewMode = localStorage.getItem(viewModeStorageKey);
       if (storedViewMode === "guided" || storedViewMode === "overview") setViewMode(storedViewMode);
+      const storedTextScale = Number(localStorage.getItem(textScaleStorageKey));
+      if (storedTextScale >= TEXT_SCALE_MIN && storedTextScale <= TEXT_SCALE_MAX) setTextScale(storedTextScale);
+      const storedAutoHide = localStorage.getItem(handlesAutoHideStorageKey);
+      if (storedAutoHide != null) setHandlesAutoHide(storedAutoHide === "true");
     } catch {
       // localStorage unavailable — the toggles just won't persist this session.
     }
@@ -262,17 +302,19 @@ export function CookMode({
   useEffect(() => {
     const el = overviewGridRef.current;
     if (!el) return;
-    const MIN_CARD_WIDTH = 220;
+    // Scales with textScale too — bigger text needs a wider card, so
+    // fewer (and correspondingly larger) columns fit.
+    const minCardWidth = 220 * textScale;
     function update() {
       if (!el) return;
-      const cols = Math.round(el.getBoundingClientRect().width / MIN_CARD_WIDTH);
+      const cols = Math.round(el.getBoundingClientRect().width / minCardWidth);
       setOverviewCols(Math.min(8, Math.max(2, cols)));
     }
     update();
     const observer = new ResizeObserver(update);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [viewMode]);
+  }, [viewMode, textScale]);
 
   // Auto-fit the ingredients/equipment split to how much content each
   // actually has, instead of a fixed 50/50, unless the cook has manually
@@ -302,12 +344,14 @@ export function CookMode({
 
   const startDrag = (e: ReactPointerEvent) => {
     dragging.current = true;
+    setActiveHandle("width");
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   const stopDrag = () => {
     if (!dragging.current) return;
     dragging.current = false;
+    setActiveHandle(null);
     widthManual.current = true;
     setSidebarWidth((w) => {
       try {
@@ -328,12 +372,14 @@ export function CookMode({
 
   const startDragHeight = (e: ReactPointerEvent) => {
     dragging.current = true;
+    setActiveHandle("height");
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   const stopDragHeight = () => {
     if (!dragging.current) return;
     dragging.current = false;
+    setActiveHandle(null);
     heightManual.current = true;
     setIngredientsHeight((h) => {
       try {
@@ -376,6 +422,30 @@ export function CookMode({
       const next = Math.min(max, Math.max(120, h + step));
       try {
         localStorage.setItem(splitStorageKey, String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  function setTextScaleAndPersist(next: number) {
+    const clamped = Math.round(Math.min(TEXT_SCALE_MAX, Math.max(TEXT_SCALE_MIN, next)) * 10) / 10;
+    setTextScale(clamped);
+    try {
+      localStorage.setItem(textScaleStorageKey, String(clamped));
+    } catch {
+      // ignore
+    }
+  }
+  const adjustTextScale = (delta: number) => setTextScaleAndPersist(textScale + delta);
+  const resetTextScale = () => setTextScaleAndPersist(1);
+
+  const toggleHandlesAutoHide = () => {
+    setHandlesAutoHide((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(handlesAutoHideStorageKey, String(next));
       } catch {
         // ignore
       }
@@ -656,6 +726,29 @@ export function CookMode({
     [currentStep, scaledIngredients, highlightedIds]
   );
 
+  // The All-steps overview grid's rows: each step's text scale is clamped
+  // to a floor below which it'd stop being readable — a row containing a
+  // step that hits that floor grows taller than the others (flex-grow, not
+  // a fixed 1) instead of letting its text keep shrinking to fit.
+  const overviewRows = useMemo(() => {
+    const roomFactor = Math.min(1.25, Math.max(0.7, 8 / Math.max(steps.length, 4)));
+    const rows: { cards: { step: Step; idx: number; scale: number }[]; grow: number }[] = [];
+    for (let i = 0; i < steps.length; i += overviewCols) {
+      const rowSteps = steps.slice(i, i + overviewCols);
+      let grow = 1;
+      const cards = rowSteps.map((step, colIdx) => {
+        const raw = wordCountScale(step.body, OVERVIEW_SCALE_STOPS) * roomFactor * textScale;
+        const scale = Math.min(2, Math.max(OVERVIEW_SCALE_FLOOR, raw));
+        if (raw < OVERVIEW_SCALE_FLOOR) {
+          grow = Math.max(grow, Math.min(2.5, OVERVIEW_SCALE_FLOOR / Math.max(raw, 0.3)));
+        }
+        return { step, idx: i + colIdx, scale };
+      });
+      rows.push({ cards, grow });
+    }
+    return rows;
+  }, [steps, overviewCols, textScale]);
+
   // When the current step mentions an ingredient that isn't already visible
   // in the (possibly scrolled) ingredients list, bring it into view — a
   // cook shouldn't have to go hunting for it every time the step changes.
@@ -751,17 +844,24 @@ export function CookMode({
           className="pointer-events-none fixed bottom-6 right-6 z-40 h-9 w-9 rounded-full object-cover opacity-80 shadow-[var(--shadow)]"
         />
       )}
+      <div
+        onMouseEnter={() => setSidebarHovered(true)}
+        onMouseLeave={() => setSidebarHovered(false)}
+        onFocus={() => setSidebarHovered(true)}
+        onBlur={() => setSidebarHovered(false)}
+        className="flex"
+      >
       <aside
         ref={asideRef}
-        style={{ width: sidebarWidth }}
-        className="sticky top-[57px] flex h-[calc(100vh-57px)] shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] text-base [container-type:inline-size]"
+        style={{ width: sidebarCollapsed ? 0 : sidebarWidth }}
+        className="sticky top-[57px] flex h-[calc(100vh-57px)] shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] text-base transition-[width] duration-150 [container-type:inline-size]"
       >
         <div
           ref={ingredientsScrollRef}
           style={equipment.length > 0 ? { height: ingredientsHeight } : undefined}
           className={`flex min-h-0 flex-col overflow-y-auto p-6 ${equipment.length > 0 ? "shrink-0" : "flex-1"}`}
         >
-          <div ref={ingredientsContentRef} className="flex min-h-0 flex-col">
+          <div ref={ingredientsContentRef} className="flex min-h-0 flex-col" style={{ zoom: textScale }}>
           <div className="mb-3 flex shrink-0 items-center justify-between">
             <h2 className="font-serif text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               Ingredients
@@ -831,19 +931,35 @@ export function CookMode({
               onPointerMove={onDragHeight}
               onPointerUp={stopDragHeight}
               onPointerCancel={stopDragHeight}
+              onDoubleClick={toggleHandlesAutoHide}
               role="slider"
               aria-label="Resize ingredients/equipment split"
+              title={
+                handlesAutoHide
+                  ? "Drag to resize (double-click to always show this bar)"
+                  : "Drag to resize (double-click to hide this bar until hovered)"
+              }
               aria-orientation="horizontal"
               aria-valuenow={Math.round(ingredientsHeight)}
               aria-valuemin={120}
               tabIndex={0}
               onKeyDown={handleHeightKeyDown}
-              className="group flex h-5 shrink-0 touch-none cursor-row-resize items-center border-t border-[var(--border)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+              className={`group flex shrink-0 touch-none cursor-row-resize items-center border-t focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
+                handlesAutoHide && activeHandle !== "height"
+                  ? "h-2 border-transparent hover:h-5 hover:border-[var(--border)]"
+                  : "h-5 border-[var(--border)]"
+              }`}
             >
-              <div className="h-1.5 w-full bg-[var(--border)] group-hover:bg-[var(--accent)]" />
+              <div
+                className={`w-full transition-colors ${
+                  handlesAutoHide && activeHandle !== "height"
+                    ? "h-0.5 bg-transparent group-hover:h-1.5 group-hover:bg-[var(--accent)]"
+                    : "h-1.5 bg-[var(--border)] group-hover:bg-[var(--accent)]"
+                }`}
+              />
             </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
-            <div ref={equipmentContentRef} className="flex min-h-0 flex-col">
+            <div ref={equipmentContentRef} className="flex min-h-0 flex-col" style={{ zoom: textScale }}>
             <h2 className="mb-3 shrink-0 font-serif text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               Equipment
             </h2>
@@ -879,17 +995,32 @@ export function CookMode({
         onPointerMove={onDrag}
         onPointerUp={stopDrag}
         onPointerCancel={stopDrag}
+        onDoubleClick={toggleHandlesAutoHide}
         role="slider"
         aria-label="Resize ingredients panel width"
+        title={
+          handlesAutoHide
+            ? "Drag to resize (double-click to always show this bar)"
+            : "Drag to resize (double-click to hide this bar until hovered)"
+        }
         aria-orientation="vertical"
         aria-valuenow={Math.round(sidebarWidth)}
         aria-valuemin={240}
         aria-valuemax={maxWidthForAria}
         tabIndex={0}
         onKeyDown={handleWidthKeyDown}
-        className="group sticky top-[57px] flex h-[calc(100vh-57px)] w-5 shrink-0 touch-none cursor-col-resize justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+        className={`group sticky top-[57px] flex h-[calc(100vh-57px)] shrink-0 touch-none cursor-col-resize justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
+          handlesAutoHide && activeHandle !== "width" ? "w-2 hover:w-5" : "w-5"
+        }`}
       >
-        <div className="h-full w-1.5 bg-[var(--border)] group-hover:bg-[var(--accent)]" />
+        <div
+          className={`h-full transition-colors ${
+            handlesAutoHide && activeHandle !== "width"
+              ? "w-0.5 bg-transparent group-hover:w-1.5 group-hover:bg-[var(--accent)]"
+              : "w-1.5 bg-[var(--border)] group-hover:bg-[var(--accent)]"
+          }`}
+        />
+      </div>
       </div>
 
       <section className="flex h-[calc(100vh-57px)] flex-1 flex-col overflow-hidden p-8 pb-24">
@@ -937,6 +1068,41 @@ export function CookMode({
                     {mode === "guided" ? "Guided" : "All steps"}
                   </button>
                 ))}
+              </div>
+
+              <div
+                role="group"
+                aria-label="Text size"
+                className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-1 py-0.5 text-sm"
+              >
+                <button
+                  type="button"
+                  onClick={() => adjustTextScale(-TEXT_SCALE_STEP)}
+                  disabled={textScale <= TEXT_SCALE_MIN}
+                  title="Smaller text"
+                  aria-label="Smaller text"
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)] disabled:opacity-30"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  onClick={resetTextScale}
+                  title="Reset text size"
+                  className="w-10 text-center tabular-nums text-[var(--text-muted)] hover:text-[var(--text)]"
+                >
+                  {Math.round(textScale * 100)}%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustTextScale(TEXT_SCALE_STEP)}
+                  disabled={textScale >= TEXT_SCALE_MAX}
+                  title="Bigger text"
+                  aria-label="Bigger text"
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)] disabled:opacity-30"
+                >
+                  +
+                </button>
               </div>
 
               {viewMode === "guided" &&
@@ -1043,41 +1209,38 @@ export function CookMode({
 
           {viewMode === "overview" ? (
             <div ref={overviewGridRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-              {Array.from({ length: Math.ceil(steps.length / overviewCols) }, (_, rowIdx) =>
-                steps.slice(rowIdx * overviewCols, rowIdx * overviewCols + overviewCols)
-              ).map((row, rowIdx) => (
-                <div key={rowIdx} className="flex min-h-0 flex-1 gap-3">
-                  {row.map((step, colIdx) => {
-                    const idx = rowIdx * overviewCols + colIdx;
-                    // Fewer steps means more room per card, so the text
-                    // scales up to actually use the space instead of
-                    // leaving it blank; many steps scales it back down.
-                    const scale = Math.min(2, Math.max(0.8, 10 / Math.max(steps.length, 4)));
-                    return (
-                      <div
-                        key={step.id}
-                        onClick={() => {
-                          setCurrent(idx);
-                          setViewMode("guided");
-                          try {
-                            localStorage.setItem(viewModeStorageKey, "guided");
-                          } catch {
-                            // ignore
-                          }
-                        }}
-                        className="flex min-h-0 flex-1 cursor-pointer flex-col gap-1.5 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 shadow-[var(--shadow)] transition-colors hover:border-[var(--accent)]"
-                        style={{ fontSize: `${0.75 * scale}rem` }}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--bg-muted)] text-[10px] font-semibold text-[var(--text-muted)]">
-                            {idx + 1}
+              {overviewRows.map((row, rowIdx) => (
+                <div
+                  key={rowIdx}
+                  className="flex min-h-0 gap-3"
+                  style={{ flexGrow: row.grow, flexBasis: 0 }}
+                >
+                  {row.cards.map(({ step, idx, scale }) => (
+                    <div
+                      key={step.id}
+                      onClick={() => {
+                        setCurrent(idx);
+                        setViewMode("guided");
+                        try {
+                          localStorage.setItem(viewModeStorageKey, "guided");
+                        } catch {
+                          // ignore
+                        }
+                      }}
+                      className="flex min-h-0 flex-1 cursor-pointer flex-col gap-1.5 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 shadow-[var(--shadow)] transition-colors hover:border-[var(--accent)]"
+                      style={{ fontSize: `${0.75 * scale}rem` }}
+                    >
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--bg-muted)] text-[10px] font-semibold text-[var(--text-muted)]">
+                          {idx + 1}
+                        </span>
+                        {step.is_pinned && (
+                          <span className="text-[10px]" aria-label="Always shown">
+                            📌
                           </span>
-                          {step.is_pinned && (
-                            <span className="text-[10px]" aria-label="Always shown">
-                              📌
-                            </span>
-                          )}
-                        </div>
+                        )}
+                      </div>
+                      <div className="flex min-h-0 flex-1 flex-col justify-center gap-1.5">
                         <p className="leading-snug">{step.body}</p>
                         {translatedStepById.get(step.id) && (
                           <p className="italic leading-snug text-[var(--accent)]">
@@ -1085,8 +1248,8 @@ export function CookMode({
                           </p>
                         )}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -1160,8 +1323,14 @@ export function CookMode({
                         className="leading-relaxed"
                         style={
                           isCurrent
-                            ? { fontSize: `${1.125 * currentStepTextScale}rem` }
-                            : { fontSize: `${0.875 * wordCountScale(step.body, OTHER_STEP_SCALE_STOPS)}rem` }
+                            ? { fontSize: `${1.125 * Math.min(6, currentStepTextScale * textScale)}rem` }
+                            : // These orphan cards have a fixed, narrow column width (not
+                              // dynamically measured like the overview grid's), so only let
+                              // textScale nudge them a little rather than scale fully —
+                              // otherwise a big textScale blows past what the column can hold.
+                              {
+                                fontSize: `${0.875 * wordCountScale(step.body, OTHER_STEP_SCALE_STOPS) * Math.min(1.15, textScale)}rem`,
+                              }
                         }
                       >
                         {isCurrent
@@ -1316,7 +1485,7 @@ export function CookMode({
                                       e.stopPropagation();
                                       setActiveControl((c) => (c === markControlKey ? null : markControlKey));
                                     }}
-                                    className="group/word relative inline-flex items-center gap-1 bg-transparent align-bottom italic text-white underline decoration-2 underline-offset-2"
+                                    className="group/word relative inline-flex items-center gap-1 bg-transparent align-bottom italic text-white underline decoration-[var(--accent)] decoration-2 underline-offset-2"
                                   >
                                     {quantity && (
                                       <span
