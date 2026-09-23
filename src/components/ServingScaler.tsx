@@ -20,6 +20,7 @@ export function ServingScaler({
   highlightedCategories,
   onScaledIngredientsChange,
   translatedNameById,
+  compact = false,
 }: {
   baseServings: number;
   servingUnit?: string;
@@ -40,6 +41,10 @@ export function ServingScaler({
   // name, keyed by ingredient id — used by Cook Mode, which keeps the
   // original name as the source of truth for ingredient-mention matching.
   translatedNameById?: Map<string, string>;
+  // Denser layout (smaller text, narrower columns) for Cook Mode's overview
+  // mode, which wants every ingredient visible at once rather than a
+  // comfortably-sized scrolling list.
+  compact?: boolean;
 }) {
   const [servings, setServings] = useState(baseServings || 1);
   const factor = servings / (baseServings || 1);
@@ -139,7 +144,11 @@ export function ServingScaler({
                 {category}
               </h3>
             )}
-            <ul className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] items-start gap-x-6 gap-y-2">
+            <ul
+              className={`grid items-start gap-x-6 gap-y-2 ${
+                compact ? "grid-cols-[repeat(auto-fill,minmax(120px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(180px,1fr))]"
+              }`}
+            >
               {items.map((ing) => {
                 const quantity = formatIngredientQuantity(ing);
                 const isHighlighted = highlightedIds?.has(ing.id);
@@ -149,8 +158,10 @@ export function ServingScaler({
                     data-ingredient-id={ing.id}
                     className={`min-w-0 break-words rounded transition-all before:mr-1 before:text-[var(--text-muted)] before:content-['·'] ${
                       isHighlighted
-                        ? "-mx-1.5 bg-[var(--accent-soft)] px-1.5 py-0.5 text-lg font-medium"
-                        : "text-base"
+                        ? `-mx-1.5 bg-[var(--accent-soft)] px-1.5 py-0.5 font-medium ${compact ? "text-sm" : "text-lg"}`
+                        : compact
+                          ? "text-xs"
+                          : "text-base"
                     }`}
                   >
                     {quantity && (

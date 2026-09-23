@@ -115,12 +115,17 @@ export function CookMode({
   // stay the same everywhere they cook, not reset on every new recipe.
   const showServingsStorageKey = "cookmode-show-servings";
   const showInlineAmountsStorageKey = "cookmode-show-inline-amounts";
+  const viewModeStorageKey = "cookmode-view-mode";
 
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [ingredientsHeight, setIngredientsHeight] = useState(360);
   const [current, setCurrent] = useState(0);
   const [extraSteps, setExtraSteps] = useState(9999); // additional steps beyond the guaranteed neighbors; defaults to showing all
   const [showServings, setShowServings] = useState(true);
+  // "guided" walks one step at a time (with neighbors for context);
+  // "overview" lays out every step at once in a dense grid, for a cook who
+  // wants to see the whole recipe rather than be walked through it.
+  const [viewMode, setViewMode] = useState<"guided" | "overview">("guided");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showInlineAmounts, setShowInlineAmounts] = useState(true);
   // A translation, when active, is shown as a gloss alongside the original
@@ -238,6 +243,8 @@ export function CookMode({
       if (storedShowServings != null) setShowServings(storedShowServings === "true");
       const storedShowInlineAmounts = localStorage.getItem(showInlineAmountsStorageKey);
       if (storedShowInlineAmounts != null) setShowInlineAmounts(storedShowInlineAmounts === "true");
+      const storedViewMode = localStorage.getItem(viewModeStorageKey);
+      if (storedViewMode === "guided" || storedViewMode === "overview") setViewMode(storedViewMode);
     } catch {
       // localStorage unavailable — the toggles just won't persist this session.
     }
@@ -789,6 +796,7 @@ export function CookMode({
             highlightedCategories={highlightedCategories}
             onScaledIngredientsChange={setScaledIngredients}
             translatedNameById={translatedNameById}
+            compact={viewMode === "overview"}
           />
           </div>
         </div>
@@ -816,7 +824,13 @@ export function CookMode({
             <h2 className="mb-3 shrink-0 font-serif text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               Equipment
             </h2>
-            <ul className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] items-start gap-x-4 gap-y-1.5 text-base">
+            <ul
+              className={`grid items-start gap-x-4 gap-y-1.5 ${
+                viewMode === "overview"
+                  ? "grid-cols-[repeat(auto-fill,minmax(100px,1fr))] text-xs"
+                  : "grid-cols-[repeat(auto-fill,minmax(140px,1fr))] text-base"
+              }`}
+            >
               {equipment.map((eq, i) => (
                 <li
                   key={eq}
@@ -868,93 +882,124 @@ export function CookMode({
               </Link>
               <h1 className="font-serif text-xl font-semibold">{title}</h1>
               <span className="text-sm text-[var(--text-muted)]">
-                Step {current + 1} of {steps.length}
+                {viewMode === "overview" ? `All ${steps.length} steps` : `Step ${current + 1} of ${steps.length}`}
               </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              {needsManualTimer ? (
-                <div className="flex items-center gap-2 rounded-[var(--radius)] border-2 border-[var(--border)] px-4 py-2 shadow-[var(--shadow)]">
-                  <label className="text-sm text-[var(--text-muted)]" htmlFor="manual-timer-minutes">
-                    Timer (min)
-                  </label>
-                  <input
-                    id="manual-timer-minutes"
-                    type="number"
-                    min={1}
-                    inputMode="numeric"
-                    placeholder="—"
-                    value={manualMinutes}
-                    onChange={(e) => setManualMinutes(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && startManualTimer()}
-                    className="w-16 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-sm tabular-nums"
-                  />
+              <div
+                role="group"
+                aria-label="Cook Mode view"
+                className="flex rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-0.5 text-sm"
+              >
+                {(["guided", "overview"] as const).map((mode) => (
                   <button
+                    key={mode}
                     type="button"
-                    onClick={startManualTimer}
-                    disabled={!manualMinutes}
-                    className="rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-medium text-white disabled:opacity-40"
+                    onClick={() => {
+                      setViewMode(mode);
+                      try {
+                        localStorage.setItem(viewModeStorageKey, mode);
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    aria-pressed={viewMode === mode}
+                    className={`rounded-full px-3 py-1 font-medium transition-colors ${
+                      viewMode === mode
+                        ? "bg-[var(--accent)] text-white"
+                        : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                    }`}
                   >
-                    Start
+                    {mode === "guided" ? "Guided" : "All steps"}
                   </button>
-                </div>
-              ) : (
-                <div
-                  className={`flex items-center gap-3 rounded-[var(--radius)] border-2 px-4 py-2 shadow-[var(--shadow)] ${
-                    mainDone
-                      ? "border-[var(--danger)] bg-[var(--danger)]/10"
-                      : "border-[var(--accent)] bg-[var(--accent-soft)]"
-                  }`}
-                >
-                  {editingTimer ? (
+                ))}
+              </div>
+
+              {viewMode === "guided" &&
+                (needsManualTimer ? (
+                  <div className="flex items-center gap-2 rounded-[var(--radius)] border-2 border-[var(--border)] px-4 py-2 shadow-[var(--shadow)]">
+                    <label className="text-sm text-[var(--text-muted)]" htmlFor="manual-timer-minutes">
+                      Timer (min)
+                    </label>
                     <input
+                      id="manual-timer-minutes"
                       type="number"
                       min={1}
                       inputMode="numeric"
-                      autoFocus
-                      value={timerEditValue}
-                      onChange={(e) => setTimerEditValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") commitTimerEdit();
-                        if (e.key === "Escape") setEditingTimer(false);
-                      }}
-                      onBlur={commitTimerEdit}
-                      className="w-20 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-2xl font-bold tabular-nums text-[var(--accent)]"
+                      placeholder="—"
+                      value={manualMinutes}
+                      onChange={(e) => setManualMinutes(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && startManualTimer()}
+                      className="w-16 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-sm tabular-nums"
                     />
-                  ) : (
                     <button
                       type="button"
-                      title="Click to change the time left"
-                      onClick={openTimerEdit}
-                      className={`text-3xl font-bold leading-none tabular-nums hover:underline ${
-                        mainDone ? "text-[var(--danger)]" : "text-[var(--accent)]"
-                      }`}
+                      onClick={startManualTimer}
+                      disabled={!manualMinutes}
+                      className="rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-medium text-white disabled:opacity-40"
                     >
-                      {mainDone ? "Time's up!" : formatDuration(mainRemaining)}
-                    </button>
-                  )}
-                  <div className="flex flex-col gap-1">
-                    <button
-                      type="button"
-                      onClick={mainTimer.running ? pauseMain : resumeMain}
-                      title="Space"
-                      className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
-                    >
-                      {mainTimer.running ? "Pause" : "Resume"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetMain}
-                      className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
-                    >
-                      Reset
+                      Start
                     </button>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div
+                    className={`flex items-center gap-3 rounded-[var(--radius)] border-2 px-4 py-2 shadow-[var(--shadow)] ${
+                      mainDone
+                        ? "border-[var(--danger)] bg-[var(--danger)]/10"
+                        : "border-[var(--accent)] bg-[var(--accent-soft)]"
+                    }`}
+                  >
+                    {editingTimer ? (
+                      <input
+                        type="number"
+                        min={1}
+                        inputMode="numeric"
+                        autoFocus
+                        value={timerEditValue}
+                        onChange={(e) => setTimerEditValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitTimerEdit();
+                          if (e.key === "Escape") setEditingTimer(false);
+                        }}
+                        onBlur={commitTimerEdit}
+                        className="w-20 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-2xl font-bold tabular-nums text-[var(--accent)]"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        title="Click to change the time left"
+                        onClick={openTimerEdit}
+                        className={`text-3xl font-bold leading-none tabular-nums hover:underline ${
+                          mainDone ? "text-[var(--danger)]" : "text-[var(--accent)]"
+                        }`}
+                      >
+                        {mainDone ? "Time's up!" : formatDuration(mainRemaining)}
+                      </button>
+                    )}
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={mainTimer.running ? pauseMain : resumeMain}
+                        title="Space"
+                        className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
+                      >
+                        {mainTimer.running ? "Pause" : "Resume"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetMain}
+                        className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-0.5 text-xs font-medium hover:bg-[var(--bg-muted)]"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                ))}
 
               <TranslateControl recipeId={recipeId} onChange={setTranslation} />
 
+              {viewMode === "guided" && (
               <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
                 Show
                 <select
@@ -969,9 +1014,48 @@ export function CookMode({
                   <option value={9999}>All steps</option>
                 </select>
               </label>
+              )}
             </div>
           </div>
 
+          {viewMode === "overview" ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                {steps.map((step, idx) => (
+                  <div
+                    key={step.id}
+                    onClick={() => {
+                      setCurrent(idx);
+                      setViewMode("guided");
+                      try {
+                        localStorage.setItem(viewModeStorageKey, "guided");
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    className="flex cursor-pointer flex-col gap-1.5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-xs shadow-[var(--shadow)] transition-colors hover:border-[var(--accent)]"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--bg-muted)] text-[10px] font-semibold text-[var(--text-muted)]">
+                        {idx + 1}
+                      </span>
+                      {step.is_pinned && (
+                        <span className="text-[10px]" aria-label="Always shown">
+                          📌
+                        </span>
+                      )}
+                    </div>
+                    <p className="leading-snug">{step.body}</p>
+                    {translatedStepById.get(step.id) && (
+                      <p className="italic leading-snug text-[var(--accent)]">
+                        {translatedStepById.get(step.id)?.body}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-[6vh]">
             {pinnedSteps.length > 0 && (
               <div className="flex flex-col gap-3">
@@ -1355,10 +1439,12 @@ export function CookMode({
               })}
             </div>
           </div>
+          )}
 
         </div>
       </section>
 
+      {viewMode === "guided" && (
       <div className="fixed bottom-6 right-6 z-40 flex gap-2">
         <button
           onClick={goPrevious}
@@ -1377,6 +1463,7 @@ export function CookMode({
           Next step
         </button>
       </div>
+      )}
     </div>
   );
 }
