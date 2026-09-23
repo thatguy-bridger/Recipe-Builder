@@ -205,6 +205,11 @@ export function CookMode({
   const ingredientsContentRef = useRef<HTMLDivElement>(null);
   const equipmentContentRef = useRef<HTMLDivElement>(null);
   const currentStepRef = useRef<HTMLDivElement>(null);
+  const overviewGridRef = useRef<HTMLDivElement>(null);
+  // How many columns the "All steps" overview grid uses, measured against
+  // the grid's actual width (not the viewport) so it accounts for the
+  // sidebar — recomputed on resize so cards keep filling the space.
+  const [overviewCols, setOverviewCols] = useState(3);
   // Once the cook drags a handle, their choice sticks (and persists) instead
   // of being recalculated from content on every render.
   const heightManual = useRef(false);
@@ -250,6 +255,24 @@ export function CookMode({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Recompute the overview grid's column count from its actual measured
+  // width whenever it (or the window) resizes, so cards always fill the
+  // available space instead of leaving a fixed breakpoint's worth of gaps.
+  useEffect(() => {
+    const el = overviewGridRef.current;
+    if (!el) return;
+    const MIN_CARD_WIDTH = 220;
+    function update() {
+      if (!el) return;
+      const cols = Math.round(el.getBoundingClientRect().width / MIN_CARD_WIDTH);
+      setOverviewCols(Math.min(8, Math.max(2, cols)));
+    }
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [viewMode]);
 
   // Auto-fit the ingredients/equipment split to how much content each
   // actually has, instead of a fixed 50/50, unless the cook has manually
@@ -1019,41 +1042,53 @@ export function CookMode({
           </div>
 
           {viewMode === "overview" ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-4">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                {steps.map((step, idx) => (
-                  <div
-                    key={step.id}
-                    onClick={() => {
-                      setCurrent(idx);
-                      setViewMode("guided");
-                      try {
-                        localStorage.setItem(viewModeStorageKey, "guided");
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    className="flex cursor-pointer flex-col gap-1.5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-xs shadow-[var(--shadow)] transition-colors hover:border-[var(--accent)]"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--bg-muted)] text-[10px] font-semibold text-[var(--text-muted)]">
-                        {idx + 1}
-                      </span>
-                      {step.is_pinned && (
-                        <span className="text-[10px]" aria-label="Always shown">
-                          📌
-                        </span>
-                      )}
-                    </div>
-                    <p className="leading-snug">{step.body}</p>
-                    {translatedStepById.get(step.id) && (
-                      <p className="italic leading-snug text-[var(--accent)]">
-                        {translatedStepById.get(step.id)?.body}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
+            <div ref={overviewGridRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+              {Array.from({ length: Math.ceil(steps.length / overviewCols) }, (_, rowIdx) =>
+                steps.slice(rowIdx * overviewCols, rowIdx * overviewCols + overviewCols)
+              ).map((row, rowIdx) => (
+                <div key={rowIdx} className="flex min-h-0 flex-1 gap-3">
+                  {row.map((step, colIdx) => {
+                    const idx = rowIdx * overviewCols + colIdx;
+                    // Fewer steps means more room per card, so the text
+                    // scales up to actually use the space instead of
+                    // leaving it blank; many steps scales it back down.
+                    const scale = Math.min(2, Math.max(0.8, 10 / Math.max(steps.length, 4)));
+                    return (
+                      <div
+                        key={step.id}
+                        onClick={() => {
+                          setCurrent(idx);
+                          setViewMode("guided");
+                          try {
+                            localStorage.setItem(viewModeStorageKey, "guided");
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                        className="flex min-h-0 flex-1 cursor-pointer flex-col gap-1.5 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 shadow-[var(--shadow)] transition-colors hover:border-[var(--accent)]"
+                        style={{ fontSize: `${0.75 * scale}rem` }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--bg-muted)] text-[10px] font-semibold text-[var(--text-muted)]">
+                            {idx + 1}
+                          </span>
+                          {step.is_pinned && (
+                            <span className="text-[10px]" aria-label="Always shown">
+                              📌
+                            </span>
+                          )}
+                        </div>
+                        <p className="leading-snug">{step.body}</p>
+                        {translatedStepById.get(step.id) && (
+                          <p className="italic leading-snug text-[var(--accent)]">
+                            {translatedStepById.get(step.id)?.body}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-[6vh]">
@@ -1281,14 +1316,12 @@ export function CookMode({
                                       e.stopPropagation();
                                       setActiveControl((c) => (c === markControlKey ? null : markControlKey));
                                     }}
-                                    className="group/word relative inline-flex items-center gap-1 bg-transparent align-bottom text-[var(--accent)]"
-                                    style={{ WebkitTextStroke: "1.2px var(--text)" }}
+                                    className="group/word relative inline-flex items-center gap-1 bg-transparent align-bottom italic text-white underline decoration-2 underline-offset-2"
                                   >
                                     {quantity && (
                                       <span
-                                        className="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-semibold leading-none"
+                                        className="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-semibold not-italic leading-none no-underline"
                                         style={{
-                                          WebkitTextStroke: "0",
                                           background: "var(--text)",
                                           color: "var(--bg)",
                                         }}
@@ -1342,7 +1375,7 @@ export function CookMode({
                                             isMarkTapActive ? "flex" : "pointer-events-none hidden"
                                           }`}
                                         >
-                                          <span className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 text-xs shadow-[var(--shadow)]">
+                                          <span className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow)]">
                                           <button
                                             type="button"
                                             title="This is matching correctly"
