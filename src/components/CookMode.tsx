@@ -1198,7 +1198,7 @@ export function CookMode({
                                       setActiveControl((c) => (c === markControlKey ? null : markControlKey));
                                     }}
                                     className="group/word relative inline-flex items-center gap-1 bg-transparent align-bottom text-[var(--accent)]"
-                                    style={{ WebkitTextStroke: "0.6px var(--text)" }}
+                                    style={{ WebkitTextStroke: "1.2px var(--text)" }}
                                   >
                                     {quantity && (
                                       <span
