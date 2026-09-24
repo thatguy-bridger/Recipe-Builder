@@ -97,3 +97,35 @@ body {
 ::selection {
   background: var(--accent-soft);
 }
+
+/* Cook Mode maximizes vertical space by hiding the site header entirely,
+   revealing it on hover/focus near the very top of the screen (via the
+   thin fixed trigger strip CookMode renders) or while hovering/focused
+   within the header itself once shown. Pure CSS (:has()) so the header
+   stays a server component with no client-side awareness of Cook Mode. */
+body:has(.cookmode-active) .site-header {
+  /* Out of flow (rather than just sticky) so Cook Mode actually reclaims
+     the vertical space instead of leaving a blank gap where the header
+     used to sit — it now overlays on top of content when revealed. */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  transform: translateY(-100%);
+  transition: transform 180ms ease;
+}
+
+body:has(.cookmode-active) .site-header:hover,
+body:has(.cookmode-active) .site-header:focus-within,
+body:has(.cookmode-hover-trigger:hover) .site-header {
+  transform: translateY(0);
+}
+
+.cookmode-hover-trigger {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 10px;
+  z-index: 39;
+}

@@ -835,7 +835,8 @@ export function CookMode({
   );
 
   return (
-    <div className="relative flex w-full" style={buildIsolatedThemeStyle(ownerTheme)}>
+    <div className="cookmode-active relative flex w-full" style={buildIsolatedThemeStyle(ownerTheme)}>
+      <div className="cookmode-hover-trigger" aria-hidden />
       {ownerTheme?.theme_watermark_url && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -854,7 +855,7 @@ export function CookMode({
       <aside
         ref={asideRef}
         style={{ width: sidebarCollapsed ? 0 : sidebarWidth }}
-        className="sticky top-[57px] flex h-[calc(100vh-57px)] shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] text-base transition-[width] duration-150 [container-type:inline-size]"
+        className="sticky top-0 flex h-screen shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] text-base transition-[width] duration-150 [container-type:inline-size]"
       >
         <div
           ref={ingredientsScrollRef}
@@ -1009,7 +1010,7 @@ export function CookMode({
         aria-valuemax={maxWidthForAria}
         tabIndex={0}
         onKeyDown={handleWidthKeyDown}
-        className={`group sticky top-[57px] flex h-[calc(100vh-57px)] shrink-0 touch-none cursor-col-resize justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
+        className={`group sticky top-0 flex h-screen shrink-0 touch-none cursor-col-resize justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
           handlesAutoHide && activeHandle !== "width" ? "w-2 hover:w-5" : "w-5"
         }`}
       >
@@ -1023,10 +1024,10 @@ export function CookMode({
       </div>
       </div>
 
-      <section className="flex h-[calc(100vh-57px)] flex-1 flex-col overflow-hidden p-8 pb-24">
+      <section className="flex h-screen flex-1 flex-col overflow-hidden p-8 pb-24">
         <div className="flex w-full flex-1 flex-col gap-8 overflow-hidden">
-          <div className="flex shrink-0 flex-wrap items-start justify-between gap-4">
-            <div>
+          <div className="flex shrink-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <Link
                 href={`/recipes/${recipeId}`}
                 title="Esc"
@@ -1034,75 +1035,99 @@ export function CookMode({
               >
                 &larr; Exit cook mode
               </Link>
-              <h1 className="font-serif text-xl font-semibold">{title}</h1>
-              <span className="text-sm text-[var(--text-muted)]">
-                {viewMode === "overview" ? `All ${steps.length} steps` : `Step ${current + 1} of ${steps.length}`}
-              </span>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <div
+                  role="group"
+                  aria-label="Cook Mode view"
+                  className="flex rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-0.5 text-sm"
+                >
+                  {(["guided", "overview"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => {
+                        setViewMode(mode);
+                        try {
+                          localStorage.setItem(viewModeStorageKey, mode);
+                        } catch {
+                          // ignore
+                        }
+                      }}
+                      aria-pressed={viewMode === mode}
+                      className={`rounded-full px-3 py-1 font-medium transition-colors ${
+                        viewMode === mode
+                          ? "bg-[var(--accent)] text-white"
+                          : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                      }`}
+                    >
+                      {mode === "guided" ? "Guided" : "All steps"}
+                    </button>
+                  ))}
+                </div>
+
+                <div
+                  role="group"
+                  aria-label="Text size"
+                  className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-1 py-0.5 text-sm"
+                >
+                  <button
+                    type="button"
+                    onClick={() => adjustTextScale(-TEXT_SCALE_STEP)}
+                    disabled={textScale <= TEXT_SCALE_MIN}
+                    title="Smaller text"
+                    aria-label="Smaller text"
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)] disabled:opacity-30"
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetTextScale}
+                    title="Reset text size"
+                    className="w-10 text-center tabular-nums text-[var(--text-muted)] hover:text-[var(--text)]"
+                  >
+                    {Math.round(textScale * 100)}%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => adjustTextScale(TEXT_SCALE_STEP)}
+                    disabled={textScale >= TEXT_SCALE_MAX}
+                    title="Bigger text"
+                    aria-label="Bigger text"
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)] disabled:opacity-30"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <TranslateControl recipeId={recipeId} onChange={setTranslation} />
+
+                {viewMode === "guided" && (
+                  <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                    Show
+                    <select
+                      value={extraSteps}
+                      onChange={(e) => setExtraSteps(Number(e.target.value))}
+                      className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1"
+                    >
+                      <option value={0}>Just neighbors</option>
+                      <option value={1}>+1 more</option>
+                      <option value={3}>+3 more</option>
+                      <option value={5}>+5 more</option>
+                      <option value={9999}>All steps</option>
+                    </select>
+                  </label>
+                )}
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <div
-                role="group"
-                aria-label="Cook Mode view"
-                className="flex rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] p-0.5 text-sm"
-              >
-                {(["guided", "overview"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => {
-                      setViewMode(mode);
-                      try {
-                        localStorage.setItem(viewModeStorageKey, mode);
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    aria-pressed={viewMode === mode}
-                    className={`rounded-full px-3 py-1 font-medium transition-colors ${
-                      viewMode === mode
-                        ? "bg-[var(--accent)] text-white"
-                        : "text-[var(--text-muted)] hover:text-[var(--text)]"
-                    }`}
-                  >
-                    {mode === "guided" ? "Guided" : "All steps"}
-                  </button>
-                ))}
-              </div>
-
-              <div
-                role="group"
-                aria-label="Text size"
-                className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-1 py-0.5 text-sm"
-              >
-                <button
-                  type="button"
-                  onClick={() => adjustTextScale(-TEXT_SCALE_STEP)}
-                  disabled={textScale <= TEXT_SCALE_MIN}
-                  title="Smaller text"
-                  aria-label="Smaller text"
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)] disabled:opacity-30"
-                >
-                  −
-                </button>
-                <button
-                  type="button"
-                  onClick={resetTextScale}
-                  title="Reset text size"
-                  className="w-10 text-center tabular-nums text-[var(--text-muted)] hover:text-[var(--text)]"
-                >
-                  {Math.round(textScale * 100)}%
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjustTextScale(TEXT_SCALE_STEP)}
-                  disabled={textScale >= TEXT_SCALE_MAX}
-                  title="Bigger text"
-                  aria-label="Bigger text"
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text)] disabled:opacity-30"
-                >
-                  +
-                </button>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h1 className="font-serif text-xl font-semibold">{title}</h1>
+                <span className="text-sm text-[var(--text-muted)]">
+                  {viewMode === "overview" ? `All ${steps.length} steps` : `Step ${current + 1} of ${steps.length}`}
+                </span>
               </div>
 
               {viewMode === "guided" &&
@@ -1185,25 +1210,6 @@ export function CookMode({
                     </div>
                   </div>
                 ))}
-
-              <TranslateControl recipeId={recipeId} onChange={setTranslation} />
-
-              {viewMode === "guided" && (
-              <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-                Show
-                <select
-                  value={extraSteps}
-                  onChange={(e) => setExtraSteps(Number(e.target.value))}
-                  className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1"
-                >
-                  <option value={0}>Just neighbors</option>
-                  <option value={1}>+1 more</option>
-                  <option value={3}>+3 more</option>
-                  <option value={5}>+5 more</option>
-                  <option value={9999}>All steps</option>
-                </select>
-              </label>
-              )}
             </div>
           </div>
 
